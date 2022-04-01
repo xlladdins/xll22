@@ -70,8 +70,8 @@ namespace xllTest
 				Assert::IsTrue(1 == r.rwLast);
 				Assert::IsTrue(2 == r.colFirst);
 				Assert::IsTrue(2 == r.colLast);
-				Assert::IsTrue(1 == r.height());
-				Assert::IsTrue(1 == r.width());
+				Assert::IsTrue(1 == height(r));
+				Assert::IsTrue(1 == width(r));
 			}
 			{
 				REF12 r(1, 2);
@@ -80,8 +80,8 @@ namespace xllTest
 				Assert::IsTrue(1 == r.rwLast);
 				Assert::IsTrue(2 == r.colFirst);
 				Assert::IsTrue(2 == r.colLast);
-				Assert::IsTrue(1 == r.height());
-				Assert::IsTrue(1 == r.width());
+				Assert::IsTrue(1 == height(r));
+				Assert::IsTrue(1 == width(r));
 			}
 
 		}

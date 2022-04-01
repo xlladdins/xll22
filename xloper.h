@@ -14,49 +14,64 @@ namespace xll {
 	concept is_xloper = std::is_same_v<X, XLOPER> || std::is_same_v<X, XLOPER12>;
 
 	template<class X> struct traits { };
-	template<> struct traits<XLOPER> { 
-		using xchar = CHAR; 
+	template<> struct traits<XLOPER> {
+		using type = XLOPER;
+		using xchar = CHAR;
 		using xint = short int;
 		using xref = XLREF;
 		using xrw = WORD;
 		using xcol = BYTE;
+		static int pascal Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
+		{
+			static HMODULE hmodule = GetModuleHandle(NULL);
+
+			return hmodule ? Excel4v(xlfn, operRes, count, opers) : xlretFailed;
+		}
 	};
-	template<> struct traits<XLOPER12> { 
-		using xchar = XCHAR; 
+	template<> struct traits<XLOPER12> {
+		using type = XLOPER12;
+		using xchar = XCHAR;
 		using xint = int;
 		using xref = XLREF12;
 		using xrw = RW;
 		using xcol = COL;
+		static int pascal Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
+		{
+			static HMODULE hmodule = GetModuleHandle(NULL);
+
+			return hmodule ? Excel12v(xlfn, operRes, count, opers) : xlretFailed;
+		}
 	};
 
 	// construct simple reference using height and width
 	template<class X>
-	class XREF : public traits<X>::xref
+	struct XREF : traits<X>::xref
 	{
 		using xrw = traits<X>::xrw;
 		using xcol = traits<X>::xcol;
-	public:
+
 		XREF(xrw r, xcol c, xrw h = 1, xcol w = 1)
 			: traits<X>::xref{ 
 				.rwFirst = r,
 				.rwLast = static_cast<xrw>(r + h - 1),
 				.colFirst = c, 
 				.colLast = static_cast<xcol>(c + w - 1) }
-		{
-			rwFirst = 1;
-		}
-		xrw height() const
-		{
-			return rwLast - rwFirst + 1;
-		}
-		xcol width() const
-		{
-			return colLast - colFirst + 1;
-		}
+		{ }
 	};
 	using REF4 = XREF<XLOPER>;
 	using REF12 = XREF<XLOPER12>;
 	using REF = XREF<XLOPERX>;
+
+	template<class X> requires is_xloper<X>
+	inline int height(const XREF<X>& r)
+	{
+		return r.rwLast - r.rwFirst + 1;
+	}
+	template<class X> requires is_xloper<X>
+	inline int width(const XREF<X>& r)
+	{
+		return r.colLast - r.colFirst + 1;
+	}
 
 	// cyclic indexing
 	template<typename T>

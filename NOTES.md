@@ -1,30 +1,33 @@
 # Notes
 
-#define DATA_TYPE_CODES(X) \
-X(signed char, C) \
-char           D
-unsigned char  E
-short          F
-unsigned short G
-int            H
-unsigned int   I
-long           J
-unsigned long  K
-float          M
-double         N
-long double    O
-pointer        P
-array          Q
-struct/class   V
-void           X
-elipsis        Z
+// type, mangled, name
+#define DATA_TYPE_ENUMX) \
+X(signed char,    C, SCHAR) \
+X(char,           D, CHAR) \
+X(unsigned char,  E, UCHAR) \
+X(short,          F, SHORT) \
+X(unsigned short, G, USHORT) \
+X(int,            H, INT) \
+X(unsigned int,   I, UINT) \
+X(long,           J, LONG) \
+X(unsigned long , K, ULONG) \
+X(float,          M, FLOAT) \
+X(double,         N, DOUBLE) \
+X(long,double     O, LONG_DOUBLE) \
+X(pointer,        P, POINTER) \
+X(array,          Q, ARRAY) \
+X(struct,         V, STRUCT) \
+X(class,          V, CLASS) \
+X(void,           X, VOID) \
+X(ellipsis,       Z, ELLIPSIS) \
 
-enum types {
+
+enum type {
 	FFI_DOUBLE, // ...
 }
 
 struct arg {
-	string type;
+	type type;
 	string name;
 	string help;
 	string init;
@@ -32,7 +35,7 @@ struct arg {
 
 // platform independent markup
 struct ffi {
-	types ret;
+	type ret;
 	void* fun; // function pointer
 	string name;
 	vector<arg> sig;

@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="x64">
+      <UniqueIdentifier>{e14625de-de5c-4bd9-b93c-cda0cb8c84bc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="xll.h">
@@ -45,5 +48,8 @@
   </ItemGroup>
   <ItemGroup>
     <Library Include="XLCALL32.LIB" />
+    <Library Include="x64\XLCALL32.LIB">
+      <Filter>x64</Filter>
+    </Library>
   </ItemGroup>
 </Project>

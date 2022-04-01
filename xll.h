@@ -10,9 +10,9 @@ namespace xll {
 	template<class T>
 	inline constexpr T* c2p(T* s)
 	{
-		if (s and *s) {
+		if (s && *s) {
 			T n = 0;
-			for (T* t = s; t and *t; ++t) {
+			for (T* t = s; t && *t; ++t) {
 				++n;
 			}
 			for (T m = n; m != 0; --m) {
@@ -27,7 +27,7 @@ namespace xll {
 	template<class T>
 	inline constexpr T* p2c(T* s)
 	{
-		if (s and *s) {
+		if (s && *s) {
 			T n = s[0];
 			for (T i = 0; i < n; ++i) {
 				s[i] = s[i + 1];
@@ -75,6 +75,8 @@ namespace xll {
 		return s;
 	}
 
+
+
 	template<class X>
 		requires is_xloper<X>
 	class XOPER final : public X {
@@ -101,17 +103,24 @@ namespace xll {
 		}
 		void dealloc_str()
 		{
-			ensure(xltypeStr == xltype); // not type()
-			xltype = xltypeNil;
+			ensure(type() == xltypeStr);
+			if (xltypeStr == xltype) { // not type()
 
-			if (val.str and val.str[0]) {
-				delete[] val.str;
+				if (val.str && val.str[0]) {
+					delete[] val.str;
+				}
 			}
+			if (xltype & xlbitXLFree) {
+				typename traits<X>::type* x[1] = {this};
+				traits<X>::Excelv(xlFree, 0, 1, x);
+			}
+			xltype = xltypeNil;
 		}
 		void allocate(const X& x)
 		{
 			switch (type()) {
 			case xltypeStr:
+				alloc_str(x.val.str + 1, x.val.str[0]);
 				break;
 			case xltypeMulti:
 				break;
@@ -126,7 +135,7 @@ namespace xll {
 		{
 			switch (type()) {
 			case xltypeStr:
-				delete[] val.str;
+				dealloc_str();
 				break;
 			case xltypeMulti:
 				break;
@@ -156,20 +165,10 @@ namespace xll {
 		{
 			o.xltype = xltypeNil;
 		}
-		XOPER& operator=(const XOPER& o)
+		XOPER& operator=(XOPER o) noexcept
 		{
-			if (this != &o) {
-				deallocate();
-				allocate(o);
-			}
-
-			return *this;
-		}
-		XOPER& operator=(XOPER&& o) noexcept
-		{
-			val = o.val;
-			xltype = o.xltype;
-			o.xltype = xltypeNil;
+			std::swap(xltype, o.xltype);
+			std::swap(val, o.val);
 
 			return *this;
 		}
@@ -230,12 +229,28 @@ namespace xll {
 		}
 
 		// xltypeStr
-		explicit XOPER(const xchar* str, xchar len = 0)
+		XOPER(const xchar* str, xchar len)
 		{
 			alloc_str(str, len);
 		}
-	};
+		explicit XOPER(const xchar* str)
+		{
+			alloc_str(str);
+		}
+		/*
+		explicit XOPER(const char* str)
+		{
 
+		}
+		*/
+		XOPER& operator=(const xchar* str)
+		{
+			deallocate();
+			alloc_str(str);
+
+			return *this;
+		}
+	};
 	using OPER4 = XOPER<XLOPER>;
 	using OPER12 = XOPER<XLOPER12>;
 	using OPERX = XOPER<XLOPERX>;
