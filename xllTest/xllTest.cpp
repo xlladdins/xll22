@@ -59,6 +59,34 @@ namespace xllTest
 		}
 	};
 
+	TEST_CLASS(_XLREF)
+	{
+		TEST_METHOD(_constructors)
+		{
+			{
+				REF4 r(1, 2);
+				auto i = r.rwFirst;
+				Assert::IsTrue(1 == r.rwFirst);
+				Assert::IsTrue(1 == r.rwLast);
+				Assert::IsTrue(2 == r.colFirst);
+				Assert::IsTrue(2 == r.colLast);
+				Assert::IsTrue(1 == r.height());
+				Assert::IsTrue(1 == r.width());
+			}
+			{
+				REF12 r(1, 2);
+				auto i = r.rwFirst;
+				Assert::IsTrue(1 == r.rwFirst);
+				Assert::IsTrue(1 == r.rwLast);
+				Assert::IsTrue(2 == r.colFirst);
+				Assert::IsTrue(2 == r.colLast);
+				Assert::IsTrue(1 == r.height());
+				Assert::IsTrue(1 == r.width());
+			}
+
+		}
+	};
+
 	TEST_CLASS(_XLOPERX)
 	{
 	public:

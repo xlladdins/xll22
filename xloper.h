@@ -18,19 +18,41 @@ namespace xll {
 		using xchar = CHAR; 
 		using xint = short int;
 		using xref = XLREF;
+		using xrw = WORD;
+		using xcol = BYTE;
 	};
 	template<> struct traits<XLOPER12> { 
 		using xchar = XCHAR; 
 		using xint = int;
 		using xref = XLREF12;
+		using xrw = RW;
+		using xcol = COL;
 	};
 
+	// construct simple reference using height and width
 	template<class X>
-	struct XREF : public traits<X>::xref
+	class XREF : public traits<X>::xref
 	{
-		XREF(unsigned r, unsigned c, unsigned h = 1, unsigned w = 1)
-			: traits<X>::xref{r, r + h - 1, c, c + w - 1}
-		{ }
+		using xrw = traits<X>::xrw;
+		using xcol = traits<X>::xcol;
+	public:
+		XREF(xrw r, xcol c, xrw h = 1, xcol w = 1)
+			: traits<X>::xref{ 
+				.rwFirst = r,
+				.rwLast = static_cast<xrw>(r + h - 1),
+				.colFirst = c, 
+				.colLast = static_cast<xcol>(c + w - 1) }
+		{
+			rwFirst = 1;
+		}
+		xrw height() const
+		{
+			return rwLast - rwFirst + 1;
+		}
+		xcol width() const
+		{
+			return colLast - colFirst + 1;
+		}
 	};
 	using REF4 = XREF<XLOPER>;
 	using REF12 = XREF<XLOPER12>;
