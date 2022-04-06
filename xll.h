@@ -85,27 +85,43 @@ namespace xll {
 				opers[i + 10] = &argument_help[i];
 			}
 		}
-		// macro
-		XArgs(const X& procedure, const X& function_text)
-			: XArgs()
+		XArgs& Procedure(const X& procedure)
 		{
 			this->procedure = procedure;
-			this->function_text = function_text;
-			macro_type = XNum<X>(2);
+
+			return *this;
 		}
-		// function
-		XArgs(const X& type_text, const X& procedure, const X& function_text)
-			: XArgs()
+		const X& Procedure() const
 		{
-			this->procedure = procedure;
-			this->type_text = type_text;
-			this->function_text = function_text;
-			macro_type = XNum<X>(1);
+			return procedure;
 		}
-		// function
 	};
 	using Args4 = XArgs<XLOPER>;
 	using Args = XArgs<XLOPER12>;
+
+	template<class X>
+	struct XMacro : public XArgs<X> {
+		XMacro(const X& procedure, const X& function_text)
+			: XArgs()
+		{
+			XArgs<X>::procedure = procedure;
+			XArgs<X>::function_text = function_text;
+			XArgs<X>::macro_type = XNum<X>(2);
+		}
+
+	};
+	template<class X>
+	struct XFunction : public XArgs<X> {
+		XFunction(const X& procedure, const X& function_text)
+			: XArgs()
+		{
+			XArgs<X>::procedure = procedure;
+			//XArgs<X>::type_text = type_text;
+			XArgs<X>::function_text = function_text;
+			XArgs<X>::macro_type = XNum<X>(1);
+		}
+
+	};
 
 	inline int Register(Args4& args)
 	{

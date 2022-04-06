@@ -41,7 +41,7 @@ namespace fms {
 	};
 	// function markup
 	struct args {
-		//cstr module; // full name of library
+		cstr module; // full name of library
 		ctype type; // return type
 		cstr  name; // C name of function to load
 		cstr  help; // short description

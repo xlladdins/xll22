@@ -25,7 +25,7 @@ namespace xll {
 		using xcol = BYTE;
 		static int Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
 		{
-			return ::Excel4v(xlfn, operRes, count, opers);
+			ensure(xlretSuccess == ::Excel4v(xlfn, operRes, count, opers));
 		}
 	};
 	template<> struct traits<XLOPER12> {
@@ -36,7 +36,7 @@ namespace xll {
 		using xcol = COL;
 		static int Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 		{
-			return ::Excel12v(xlfn, operRes, count, opers);
+			ensure(xlretSuccess == ::Excel12v(xlfn, operRes, count, opers));
 		}
 	};
 
@@ -61,6 +61,7 @@ namespace xll {
 		using X::xltype;
 		using X::val;
 		using xchar = traits<X>::xchar;
+
 		static xchar len(const xchar* s)
 		{
 			size_t n = 0;
@@ -73,45 +74,44 @@ namespace xll {
 
 			return static_cast<xchar>(n);
 		}
+
+		// allocate and set str[0]
 		void alloc(xchar len)
 		{
 			ensure(len <= traits<X>::xchar_max);
 			val.str = (xchar*)::malloc((len + 1) * sizeof(xchar));
-			if (val.str) {
+			ensure(val.str);
+			val.str[0] = len;
+			xltype = xltypeStr;
+		}
+		void realloc(xchar len)
+		{
+			ensure(xltypeStr == xltype);
+			if (val.str[0] != len) {
+				ensure(len <= traits<X>::xchar_max);
+				val.str = (xchar*)::realloc(val.str, (len + 1) * sizeof(xchar));
+				ensure(val.str);
 				val.str[0] = len;
 			}
 		}
 		void dealloc()
 		{
-			if (val.str) {
-				::free(val.str);
-				val.str = nullptr;
-			}
-		}
-		void realloc(xchar len)
-		{
-			ensure(len <= traits<X>::xchar_max);
-			if (val.str) {
-				if (val.str[0] != len) {
-					val.str = (xchar*)::realloc(val.str, (len + 1) * sizeof(xchar));
-				}
-			}
-			else {
-				alloc(len);
-			}
+			ensure(xltypeStr == xltype);
+			::free(val.str);
+			xltype = xltypeNil;
 		}
 		// copy to allocated same size string
 		void copy(const xchar* str, xchar len)
 		{
+			ensure(xltypeStr == xltype);
 			ensure(val.str[0] == len);
 			std::copy(str, str + len, val.str + 1);
 		}
 	public:
 		XStr()
-			: X{ .val = { .str = nullptr }, .xltype = xltypeStr }
+			: XStr(nullptr, 0)
 		{ }
 		XStr(const xchar* str, xchar len)
-			: XStr()
 		{
 			alloc(len);
 			copy(str, len);
@@ -125,16 +125,12 @@ namespace xll {
 		{ }
 		explicit XStr(const XStr& str)
 			: XStr(str.val.str + 1, str.val.str[0])
-		{ }
+		{
+		}
 		XStr& operator=(const XStr& str)
 		{
-			if (str.val.str) {
-				realloc(str.val.str[0]);
-				copy(str.val.str + 1, str.val.str[0]);
-			}
-			else {
-				dealloc();
-			}
+			realloc(str.val.str[0]);
+			copy(str.val.str + 1, str.val.str[0]);
 
 			return *this;
 		}
@@ -142,68 +138,45 @@ namespace xll {
 		{
 			dealloc();
 		}
-		bool operator==(const XStr& str) const
+		bool equal(const xchar* str, int len) const
 		{
-			if (!val.str or !str.val.str) {
-				return val.str == str.val.str;
-			}
-			if (val.str[0] != str.val.str[0]) {
+			if (val.str[0] != len) {
 				return false;
 			}
 
-			return std::equal(val.str, val.str + val.str[0] + 1, str.val.str);
+			return std::equal(str, str + len, val.str + 1);
 		}
 		bool operator==(const xchar* str) const
 		{
-			if (!val.str or !str) {
-				return val.str == str;
-			}
-			xchar i = 0;
-			for (; str[i] && i < val.str[0]; ++i) {
-				if (str[i] != val.str[i + 1]) {
-					return false;
-				}
-			}
-
-			return i == val.str[0];
+			return equal(str, len(str));
 		}
-		auto operator<=>(const XStr& str) const //noexcept
+		bool operator==(const XStr& str) const
 		{
-			if (!val.str or !str.val.str) {
-				return val.str <=> str.val.str;
-			}
-			if (val.str[0] != str.val.str[0]) {
-				return val.str[0] <=> str.val.str[0];
-			}
-			for (xchar i = 1; i <= val.str[0]; ++i) {
-				if (val.str[i] != str.val.str[i]) {
-					return val.str[i] <=> str.val.str[i];
-				}
-			}
-				                      
-			return 0 <=> 0;
+			return equal(str.val.str + 1, str.val.str[0]);
 		}
 		xchar& operator[](xchar i)
 		{
-			ensure(val.str && i < val.str[0]);
+			ensure(i < val.str[0]);
 			return val.str[i + 1];
 		}
 		xchar operator[](xchar i) const
 		{
-			ensure(val.str && i < val.str[0]);
+			ensure(i < val.str[0]);
 			return val.str[i + 1];
 		}
 		XStr& append(const xchar* str, xchar len)
 		{
-			if (str && *str) {
+			if (len) {
 				xchar n = val.str[0];
 				realloc(n + len);
-				for (xchar i = 0; str[i] && i < len; ++i) {
-					val.str[n + 1 + i] = str[i];
-				}
+				std::copy(str, str + len, val.str + 1 + n);
 			}
 
 			return *this;
+		}
+		XStr& append(const xchar* str)
+		{
+			return append(str, len(str));
 		}
 	};
 	using Str4 = XStr<XLOPER>;
