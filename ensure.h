@@ -6,7 +6,7 @@
 
 // Define NENSURE to turn off ensure.
 #ifdef NENSURE
-#define ensure(x)
+#define ensure(x) if (!(e)) { ; } else (void)0;
 #endif
 
 #ifndef ensure

@@ -1,5 +1,5 @@
 // debug.cpp - dump memory leaks
-// Copyright (c) KALX, LLC. All rights reserved. No warranty is made.
+// Copyright (c) 2006-2016 KALX, LLC. All rights reserved. No warranty is made.
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 //#define _CRTDBG_MAP_ALLOC_NEW 

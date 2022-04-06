@@ -1,257 +1,123 @@
-// xll.h - Excel add-in header
 #pragma once
-#include <concepts>
-#include <memory>
+#include <vector>
 #include "xloper.h"
 
 namespace xll {
 
-	// null terminated to counted
-	template<class T>
-	inline constexpr T* c2p(T* s)
-	{
-		if (s && *s) {
-			T n = 0;
-			for (T* t = s; t && *t; ++t) {
-				++n;
-			}
-			for (T m = n; m != 0; --m) {
-				s[m] = s[m - 1];
-			}
-			s[0] = n;
-		}
-
-		return s;
-	}
-	// counted to null terminated
-	template<class T>
-	inline constexpr T* p2c(T* s)
-	{
-		if (s && *s) {
-			T n = s[0];
-			for (T i = 0; i < n; ++i) {
-				s[i] = s[i + 1];
-			}
-			s[n] = 0;
-		}
-
-		return s;
-	}
-
-	// counted string to new[]d counted wide character string
-	inline wchar_t* mb2wc(const char* s)
-	{
-		if (!*s) {
-			return nullptr;
-		}
-
-		int wn = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, s + 1, s[0], nullptr, 0);
-		ensure(0 != wn);
-
-		wchar_t* ws = new wchar_t[wn + 1];
-		if (ws) {
-			ensure(wn == MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, s + 1, s[0], ws + 1, wn));
-			*ws = (wchar_t)wn;
-		}
-
-		return ws;
-	}
-	// counted wide character string to new[]d counted string
-	inline char* wc2mb(const wchar_t* ws)
-	{
-		if (!*ws) {
-			return nullptr;
-		}
-
-		int n = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, ws + 1, ws[0], nullptr, 0, nullptr, nullptr);
-		ensure(0 != n);
-
-		char* s = new char[n + 1];
-		if (s) {
-			ensure(n == WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, ws + 1, ws[0], s + 1, n, nullptr, nullptr));
-			*s = (char)n;
-		}
-
-		return s;
-	}
-
-
-
-	template<class X>
-		requires is_xloper<X>
-	class XOPER final : public X {
+	// fixed size xltypeStr
+	template<class X, size_t N>
+	class XSTR : public X {
 		using xchar = traits<X>::xchar;
-		void alloc_str(const xchar* str, xchar len = 0)
-		{
-			static xchar zero = 0;
-			xltype = xltypeStr;
-			val.str = &zero;
-			if constexpr (std::is_same_v<X, XLOPER>) {
-				auto n = strlen(str);
-				ensure(n <= 0xFF);
-				val.str = new xchar[n + 1];
-				val.str[0] = (xchar)n;
-				strncpy_s(val.str + 1, n, str, n);
-			}
-			if constexpr (std::is_same_v<X, XLOPER12>) {
-				auto n = wcslen(str);
-				ensure(n <= 0x7FFF);
-				val.str = new xchar[n + 1];
-				val.str[0] = (xchar)n;
-				wcsncpy_s(val.str + 1, n, str, n);
-			}
-		}
-		void dealloc_str()
-		{
-			ensure(type() == xltypeStr);
-			if (xltypeStr == xltype) { // not type()
-
-				if (val.str && val.str[0]) {
-					delete[] val.str;
-				}
-			}
-			if (xltype & xlbitXLFree) {
-				typename traits<X>::type* x[1] = {this};
-				traits<X>::Excelv(xlFree, 0, 1, x);
-			}
-			xltype = xltypeNil;
-		}
-		void allocate(const X& x)
-		{
-			switch (type()) {
-			case xltypeStr:
-				alloc_str(x.val.str + 1, x.val.str[0]);
-				break;
-			case xltypeMulti:
-				break;
-			case xltypeBigData:
-				break;
-			default:
-				xltype = x.xltype;
-				val = x.val;
-			}
-		}
-		void deallocate() noexcept
-		{
-			switch (type()) {
-			case xltypeStr:
-				dealloc_str();
-				break;
-			case xltypeMulti:
-				break;
-			case xltypeBigData:
-				break;
-			}
-			xltype = xltypeNil;
-		}
+		xchar buf[N + 1];
 	public:
-		using X::xltype;
-		using X::val;
-
-		// default to Nil
-		XOPER()
-			: X{ XNil<X>{} }
-		{ }
-		XOPER(const X& x)
+		XSTR(const xchar* str, xchar len)
+			: X{ .val = {.str = (xchar*)buf}, .xltype = xltypeStr }
 		{
-			allocate(x);
-		}
-		XOPER(const XOPER& o)
-		{
-			allocate(o);
-		}
-		XOPER(XOPER&& o) noexcept
-			: val(o.val), xltype(o.xltype)
-		{
-			o.xltype = xltypeNil;
-		}
-		XOPER& operator=(XOPER o) noexcept
-		{
-			std::swap(xltype, o.xltype);
-			std::swap(val, o.val);
-
-			return *this;
-		}
-		~XOPER() noexcept
-		{
-			deallocate();
-		}
-
-		int type() const
-		{
-			return xll::type<X>(*this);
-		}
-
-		bool is_scalar() const
-		{
-			return type() & xltypeScalar;
-		}
-
-		bool operator==(const X& x) const
-		{
-			return ::operator==(*this, x);
-		}
-		bool operator!=(const X& x) const
-		{
-			return !(operator==(x));
-		}
-
-		// xltypeNum
-		explicit XOPER(double num)
-			: X{Num<X>(num)}
-		{ }
-		XOPER& operator=(double num)
-		{
-			deallocate();
-			xltype = xltypeNum;
-			val.num = num;
-
-			return *this;
-		}
-		operator double() const
-		{
-			switch (type()) {
-			case xltypeNum:
-				return val.num;
-			case xltypeBool:
-				return val.xbool;
-			case xltypeInt:
-				return val.w;
-			}
-
-			return std::numeric_limits<double>::quite_NaN();
-		}
-		operator double&()
-		{
-			ensure(xltypeNum == type());
-
-			return val.num;
-		}
-
-		// xltypeStr
-		XOPER(const xchar* str, xchar len)
-		{
-			alloc_str(str, len);
-		}
-		explicit XOPER(const xchar* str)
-		{
-			alloc_str(str);
-		}
-		/*
-		explicit XOPER(const char* str)
-		{
-
-		}
-		*/
-		XOPER& operator=(const xchar* str)
-		{
-			deallocate();
-			alloc_str(str);
-
-			return *this;
+			std::copy(str, str + len, buf + 1);
+			buf[0] = len;
 		}
 	};
-	using OPER4 = XOPER<XLOPER>;
-	using OPER12 = XOPER<XLOPER12>;
-	using OPERX = XOPER<XLOPERX>;
+#define XLL_STR4(s) XSTR<XLOPER>(s, _countof(s))
+#define XLL_STR(s) XSTR<XLOPER12>(s, _countof(s))
+
+	using cstr = std::string;
+	struct arg {
+		cstr type;
+		cstr name;
+		cstr help;
+		cstr init;
+	};
+	struct args {
+		cstr module;
+		cstr type; // return type
+		cstr procedure; // name of function to load
+		cstr function_text; // name to use
+		std::vector<arg> arguments;
+		cstr category;
+		cstr help_topic;
+		cstr function_help;
+	};
+
+	inline args xxxa = {
+		//.module = "",
+		.type = "",
+		.procedure = "",
+		.function_text = "",
+		.arguments = {
+			arg("","","",""),
+			arg("","","",""),
+		},
+		.category = "",
+		.help_topic = "",
+		.function_help = "",
+	};
+
+	// arguments of xlfRegister
+	template<class X = XLOPER12>
+	struct XArgs {
+		X file_text; // name of dll
+		X procedure; // name of function to load
+		X type_text; // signature
+		X function_text; // Excel name
+		X argument_text; // comma separated argument names
+		X macro_type; // 1 for a function or 2 for a command
+		X category;
+		X shortcut_text;
+		X help_topic;
+		X function_help;
+		X argument_help[21];
+		X* opers[32];
+		XArgs()
+			: file_text{ .val = { .str = const_cast<XCHAR*>(module_text) }, .xltype = xltypeStr },
+			  type_text{XNil<X>},
+			  argument_text{XNil<X>},
+			  category{XNil<X>},
+			  shortcut_text{XNil<X>},
+			  help_topic{XNil<X>},
+			  function_help{XNil<X>},
+			  opers{ 
+				&file_text, &procedure, &type_text, &function_text, &argument_text, 
+				&macro_type, &category, &shortcut_text, &help_topic, &function_help
+			  }
+		{
+			for (int i = 0; i < 21; ++i) {
+				argument_help[i] = XNil<X>;
+				opers[i + 10] = &argument_help[i];
+			}
+		}
+		// macro
+		XArgs(const X& procedure, const X& function_text)
+			: XArgs()
+		{
+			this->procedure = procedure;
+			this->function_text = function_text;
+			macro_type = XNum<X>(2);
+		}
+		// function
+		XArgs(const X& type_text, const X& procedure, const X& function_text)
+			: XArgs()
+		{
+			this->procedure = procedure;
+			this->type_text = type_text;
+			this->function_text = function_text;
+			macro_type = XNum<X>(1);
+		}
+		// function
+	};
+	using Args4 = XArgs<XLOPER>;
+	using Args = XArgs<XLOPER12>;
+
+	inline int Register(Args4& args)
+	{
+		XLOPER x;
+		int ret = Excel4v(xlfRegister, &x, 10/* + n*/, args.opers);
+		return ret;
+	}
+	inline int Register(Args& args)
+	{
+		XLOPER12 x;
+		int ret = Excel12v(xlfRegister, &x, 10, args.opers);
+		return ret;
+	}
+
 }

@@ -3,7 +3,6 @@
 
 using namespace xll;
 
-
 int main()
 {
 	const XLOPER x = STR4("x");
