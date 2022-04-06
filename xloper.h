@@ -22,10 +22,10 @@ namespace xll {
 		using xchar = CHAR;
 		static constexpr xchar xchar_max = std::numeric_limits<xchar>::max();
 		using xrw = WORD;
-		using xcol = BYTE;
+		using xcol = WORD;  // BYTE in REF
 		static int Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
 		{
-			ensure(xlretSuccess == ::Excel4v(xlfn, operRes, count, opers));
+			return ::Excel4v(xlfn, operRes, count, opers);
 		}
 	};
 	template<> struct traits<XLOPER12> {
@@ -36,12 +36,41 @@ namespace xll {
 		using xcol = COL;
 		static int Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 		{
-			ensure(xlretSuccess == ::Excel12v(xlfn, operRes, count, opers));
+			return ::Excel12v(xlfn, operRes, count, opers);
 		}
 	};
 
-	// full name of dll set in DllMain
-	inline const TCHAR* module_text = nullptr;
+	template<class X>
+	inline int type(const X& x)
+	{
+		return x.xltype & ~(xlbitDLLFree | xlbitXLFree);
+	}
+	template<class X>
+	inline typename traits<X>::xrw rows(const X& x)
+	{
+		return xltypeMulti == type(x) ? x.val.array.rows : 1;
+	}
+	template<class X>
+	inline typename traits<X>::xcol columns(const X& x)
+	{
+		return xltypeMulti == type(x) ? x.val.array.columns : 1;
+	}
+	template<class X>
+	inline auto size(const X& x)
+	{
+		return rows(x) * columns(x);
+	}
+	// index
+	template<class X>
+	inline X* begin(X& x)
+	{
+		return xltypeMulti == type(x) ? x.val.array.lparray : &x;
+	}
+	template<class X>
+	inline X* end(X& x)
+	{
+		return xltypeMulti == type(x) ? begin(x) + size(x) : &x + 1;
+	}
 
 	// floating point double
 	template<class X = XLOPER12>
@@ -53,134 +82,6 @@ namespace xll {
 	};
 	using Num4 = XNum<XLOPER>;
 	using Num = XNum<XLOPER12>;
-
-	// string
-	template<class X>
-		requires is_xloper<X>
-	class XStr : public virtual X {
-		using X::xltype;
-		using X::val;
-		using xchar = traits<X>::xchar;
-
-		static xchar len(const xchar* s)
-		{
-			size_t n = 0;
-			if (s) {
-				while (s[n]) {
-					++n;
-				}
-				ensure(n <= traits<X>::xchar_max);
-			}
-
-			return static_cast<xchar>(n);
-		}
-
-		// allocate and set str[0]
-		void alloc(xchar len)
-		{
-			ensure(len <= traits<X>::xchar_max);
-			val.str = (xchar*)::malloc((len + 1) * sizeof(xchar));
-			ensure(val.str);
-			val.str[0] = len;
-			xltype = xltypeStr;
-		}
-		void realloc(xchar len)
-		{
-			ensure(xltypeStr == xltype);
-			if (val.str[0] != len) {
-				ensure(len <= traits<X>::xchar_max);
-				val.str = (xchar*)::realloc(val.str, (len + 1) * sizeof(xchar));
-				ensure(val.str);
-				val.str[0] = len;
-			}
-		}
-		void dealloc()
-		{
-			ensure(xltypeStr == xltype);
-			::free(val.str);
-			xltype = xltypeNil;
-		}
-		// copy to allocated same size string
-		void copy(const xchar* str, xchar len)
-		{
-			ensure(xltypeStr == xltype);
-			ensure(val.str[0] == len);
-			std::copy(str, str + len, val.str + 1);
-		}
-	public:
-		XStr()
-			: XStr(nullptr, 0)
-		{ }
-		XStr(const xchar* str, xchar len)
-		{
-			alloc(len);
-			copy(str, len);
-		}
-		template<size_t N>
-		XStr(const xchar (&str)[N])
-			: XStr(str, static_cast<xchar>(N - 1))
-		{ }
-		explicit XStr(const xchar* str)
-			: XStr(str, len(str))
-		{ }
-		explicit XStr(const XStr& str)
-			: XStr(str.val.str + 1, str.val.str[0])
-		{
-		}
-		XStr& operator=(const XStr& str)
-		{
-			realloc(str.val.str[0]);
-			copy(str.val.str + 1, str.val.str[0]);
-
-			return *this;
-		}
-		virtual ~XStr()
-		{
-			dealloc();
-		}
-		bool equal(const xchar* str, int len) const
-		{
-			if (val.str[0] != len) {
-				return false;
-			}
-
-			return std::equal(str, str + len, val.str + 1);
-		}
-		bool operator==(const xchar* str) const
-		{
-			return equal(str, len(str));
-		}
-		bool operator==(const XStr& str) const
-		{
-			return equal(str.val.str + 1, str.val.str[0]);
-		}
-		xchar& operator[](xchar i)
-		{
-			ensure(i < val.str[0]);
-			return val.str[i + 1];
-		}
-		xchar operator[](xchar i) const
-		{
-			ensure(i < val.str[0]);
-			return val.str[i + 1];
-		}
-		XStr& append(const xchar* str, xchar len)
-		{
-			if (len) {
-				xchar n = val.str[0];
-				realloc(n + len);
-				std::copy(str, str + len, val.str + 1 + n);
-			}
-
-			return *this;
-		}
-		XStr& append(const xchar* str)
-		{
-			return append(str, len(str));
-		}
-	};
-	using Str4 = XStr<XLOPER>;
-	using Str = XStr<XLOPER12>;
 
 	// Booliean value
 	template<class X = XLOPER12>
@@ -207,69 +108,146 @@ namespace xll {
 	static constexpr XLOPER12 ErrNA = Err<XLOPER12>(xlerrNA);
 
 	template<class X>
-	class XMulti : public virtual X {
-		using X::xltype;
-		using X::val;
+	inline constexpr X XMissing{ .val = {.str = nullptr}, .xltype = xltypeMissing };
+	inline constexpr XLOPER Missing4 = XMissing<XLOPER>;
+	inline constexpr XLOPER12 Missing = XMissing<XLOPER12>;
+
+	template<class X>
+	inline constexpr X XNil{ .val = { .str = nullptr }, .xltype = xltypeNil};
+	inline constexpr XLOPER Nil4 = XNil<XLOPER>;
+	inline constexpr XLOPER12 Nil = XNil<XLOPER12>;
+
+	template<class X>
+		requires is_xloper<X>
+	class XOPER : public X {
+		using xchar = traits<X>::xchar;
 		using xrw = traits<X>::xrw;
 		using xcol = traits<X>::xcol;
-		void alloc(xrw r, xcol c)
-		{
-			val.array.rows = r;
-			val.array.columns = c;
-			val.array.lparray = (X*)malloc(r * c * sizeof(X));
-		}
-		void realloc(xrw r, xcol c)
-		{
-			if (size() != r * c) {
-				val.array.lparray = (X*)::realloc(val.array.lparray, r * c * sizeof(X));
-			}
-			val.array.rows = r;
-			val.array.columns = c;
-		}
-		void dealloc()
-		{
-			if (size()) {
-				::free(val.array.lparray);
-			}
-			val.array.rows = 0;
-			val.array.columns = 0;
-			val.array.lparray = nullptr;
-		}
-		void fill(const X& x)
-		{
-			std::copy(begin(), end(), x);
-		}
 	public:
-		XMulti() noexcept
-			: X{ .val = {.array = {.lparray = nullptr, .rows = 0, .columns = 0}} }
+		using X::xltype;
+		using X::val;
+
+		XOPER()
+			: X{.xltype = xltypeNil}
 		{ }
-		XMulti(xrw r, xcol c)
-			: X{ .val = {.array = {.lparray = nullptr, .rows = r, .columns = c}} }
+		XOPER(const X& x)
 		{
-			alloc(r, c);
-			fill(XNil<X>);
+			if (xltypeStr == ::type(x)) {
+				malloc_str(x.val.str[0]);
+				std::copy(x.val.str + 1, x.val.str + 1 + x.val.str[0], val.str + 1);
+			}
+			else if (xltypeMulti == ::type(x)) {
+				malloc_multi(x.val.array.rows, x.val.array.columns);
+				std::copy(::begin(x), ::end(x), val.array.lparray);
+			}
+			else {
+				// ensure(is_scalar(x));
+				xltype = x.xltype;
+				val = x.val;
+			}
 		}
-		virtual ~XMulti()
+		explicit XOPER(const XOPER& o)
+			: XOPER((X)o)
+		{ }
+		XOPER& operator=(const XOPER&) = delete;
+		~XOPER()
 		{
-			dealloc();
+			free_oper();
 		}
-		XMulti& resize(int r, int c)
+
+		bool operator==(const X& x) const
 		{
-			realloc(r, c);
+			if (xltypeStr == ::type(x)) {
+				return equal(x.val.str + 1, x.val.str[0]);
+			}
+			else if (xltypeMulti == ::type(x)) {
+				if (rows() != ::rows(x) || columns() != ::columns(x)) {
+					return false;
+				}
+
+				return std::equal(begin(), end(), ::begin(x));
+			}
+		}
+		bool operator==(const XOPER& o) const
+		{
+			return operator==((X)o);
+		}
+		int type() const
+		{
+			return ::type(*this);
+		}
+
+		// Num
+		explicit XOPER(double num)
+			: X(XNum<X>(num))
+		{ }
+
+		// Str
+		XOPER(const xchar* str, xchar len)
+		{
+			malloc_str(len);
+			std::copy(str, str + len, val.str + 1);
+		}
+		explicit XOPER(const xchar* str)
+			: XOPER(str, len(str))
+		{ }
+		template<size_t N>
+		XOPER(const xchar(&str)[N])
+			: XOPER(str, static_cast<xchar>(N - 1))
+		{
+			static_assert(N <= traits<X>::xchar_max);
+		}
+		bool operator==(const xchar* str) const
+		{
+			return equal(str, len(str));
+		}
+		XOPER& append(const xchar* str, xchar len)
+		{
+			xchar n = 0;
+
+			if (xltypeNil == xltype) {
+				malloc_str(len);
+			}
+			else if (len) {
+				ensure(xltypeStr == xltype);
+				n = val.str[0];
+				realloc_str(n + len);
+			}
+			std::copy(str, str + len, val.str + 1 + n);
 
 			return *this;
 		}
+		XOPER& append(const xchar* str)
+		{
+			return append(str, len(str));
+		}
+
+		// Multi
+		XOPER(xrw r, xcol c)
+		{
+			malloc_multi(r, c);
+			std::fill(begin(), end(), XNil<X>);
+			/*
+			for (int i = 0; i < size(); ++i) {
+				new (val.array.lparray + i)XOPER{};
+			}
+			*/
+		}
 		xrw rows() const noexcept
 		{
-			return val.array.rows;
+			return xltypeMulti == type() ? val.array.rows : 1;
 		}
 		xrw columns() const noexcept
 		{
-			return val.array.columns;
+			return xltypeMulti == type() ? val.array.columns : 1;
 		}
 		auto size() const noexcept
 		{
 			return rows() * columns();
+		}
+		const X* array() const
+		{
+			return xltypeMulti == type() ? val.array.lparray : nullptr;
 		}
 		X& operator[](int i)
 		{
@@ -287,103 +265,117 @@ namespace xll {
 		{
 			return val.array.lparray[i * columns() + j];
 		}
-		X* begin()
+		XOPER* begin()
 		{
-			return val.array.lparray;
+			return xltypeMulti == type() ? (XOPER*)val.array.lparray : this;
 		}
 		const X* begin() const
 		{
-			return val.array.lparray;
+			return xltypeMulti == type() ? val.array.lparray : this;
 		}
-		X* end()
+		XOPER* end()
 		{
-			return val.array.lparray + size();
+			return xltypeMulti == type() ? (XOPER*)val.array.lparray + size() : this + 1;
 		}
 		const X* end() const
 		{
-			return val.array.lparray + size();
+			return xltypeMulti == type() ? val.array.lparray + size() : this + 1;
 		}
-	};
-	using Multi4 = XMulti<XLOPER>;
-	using Multi = XMulti<XLOPER12>;
-
-	template<class X>
-	inline constexpr X XMissing{ .val = {.num = 0}, .xltype = xltypeMissing };
-	inline constexpr XLOPER Missing4 = XMissing<XLOPER>;
-	inline constexpr XLOPER12 Missing = XMissing<XLOPER12>;
-
-	template<class X>
-	inline constexpr X XNil{ .val = { .num = 0 }, .xltype = xltypeNil};
-	inline constexpr XLOPER Nil4 = XNil<XLOPER>;
-	inline constexpr XLOPER12 Nil = XNil<XLOPER12>;
-
-	template<class X>
-		requires is_xloper<X>
-	class XOPER : public XStr<X>, XMulti<X> {
-		using X::xltype;
-		using X::val;
-		using xchar = traits<X>::xchar;
-		using xrw = traits<X>::xrw;
-		using xcol = traits<X>::xcol;
-	public:
-		XOPER()
-			: X(XNil<X>)
-		{ }
-		XOPER(const X& x)
+	private:
+		static xchar len(const xchar* s)
 		{
-			if (xltypeStr == x.xltype) {
-				XStr<X>(x.val.str + 1, x.val.str[0]);
+			size_t n = 0;
+			if (s) {
+				while (s[n]) {
+					++n;
+				}
+				ensure(n <= traits<X>::xchar_max);
 			}
-			else if (xltypeMulti == x.xltype) {
-				XMulti<X>(x.val.array.rows, x.val.array.columns);
-				std::copy(x.val.array.lparray, x.val.lparray + size(), val.array.lparray);
+
+			return static_cast<xchar>(n);
+		}
+		bool equal(const xchar* str, int len) const
+		{
+			if (val.str[0] != len) {
+				return false;
+			}
+
+			return std::equal(str, str + len, val.str + 1);
+		}
+
+		void free_oper()
+		{
+			if (xltypeStr == xltype) {
+				free_str();
+			}
+			else if (xltypeMulti == xltype) {
+				free_multi();
 			}
 			else {
-				xltype = x.xltype;
-				val = x.val;
+				xltype = xltypeNil;
 			}
 		}
-		XOPER& operator=(const XOPER&) = delete;
-		~XOPER() noexcept
-		{ 
-			if (xltype & xlbitXLFree) {
+		// allocate and set str[0]
+		void malloc_str(xchar len)
+		{
+			ensure(len <= traits<X>::xchar_max);
+			val.str = (xchar*)::malloc((len + 1) * sizeof(xchar));
+			ensure(val.str);
+			val.str[0] = len;
+			xltype = xltypeStr;
+		}
+		void realloc_str(xchar len)
+		{
+			ensure(xltypeStr == xltype);
+			if (val.str[0] != len) {
+				ensure(len <= traits<X>::xchar_max);
+				val.str = (xchar*)::realloc(val.str, (len + 1) * sizeof(xchar));
+				ensure(val.str);
+				val.str[0] = len;
+			}
+		}
+		void free_str()
+		{
+			if (xltypeStr == xltype) {
+				::free(val.str);
+			}
+			else if ((xltypeStr | xlbitXLFree) == xltype) {
 				X* x[1] = { (X*)this };
 				traits<X>::Excelv(xlFree, 0, 1, x);
 			}
+			xltype = xltypeNil;
 		}
-		int type() const
+		void malloc_multi(xrw r, xcol c)
 		{
-			return type(*this);
-		}
-		auto size() const
-		{
-			return XMulti<X>::size();
-		}
-		explicit XOPER(double num)
-			: X(XNum<X>(num))
-		{ }
-		explicit XOPER(const xchar* str)
-			: XStr<X>(str)
-		{ }
-		XOPER(xrw r, xcol c)
-			: XMulti<X>(r, c)
-		{ }
-
-		XOPER& operator[](int i)
-		{
-			if (type() == xltypeMulti) {
-				return val.array.lparray[i];
+			val.array.rows = r;
+			val.array.columns = c;
+			if (size()) {
+				val.array.lparray = (X*)malloc(r * c * sizeof(X));
+				ensure(val.array.lparray);
 			}
-			ensure(i == 0);
-			return *this;
-		}
-		const XOPER& operator[](int i) const
-		{
-			if (type() == xltypeMulti) {
-				return val.array.lparray[i];
+			else {
+				val.array.lparray = nullptr;
 			}
-			ensure(i == 0);
-			return *this;
+			xltype = xltypeMulti;
+		}
+		void realloc_multi(xrw r, xcol c)
+		{
+			ensure(xltypeMulti == xltype);
+			if (size() != r * c) {
+				val.array.lparray = (X*)::realloc(val.array.lparray, r * c * sizeof(X));
+				ensure(val.array.lparray);
+			}
+			val.array.rows = r;
+			val.array.columns = c;
+		}
+		void free_multi()
+		{
+			if (xltypeMulti == xltype) {
+				if (size()) {
+					::free(val.array.lparray);
+				}
+				xltype = xltypeNil;
+			}
 		}
 	};
 	using OPER4 = XOPER<XLOPER>;
