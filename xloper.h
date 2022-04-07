@@ -72,29 +72,7 @@ namespace xll {
 		return xltypeMulti == type(x) ? begin(x) + size(x) : &x + 1;
 	}
 
-	// floating point double
-	template<class X = XLOPER12>
-		requires is_xloper<X>
-	struct XNum : public X {
-		XNum(double num)
-			: X{ .val = {.num = num}, .xltype = xltypeNum }
-		{ }
-	};
-	using Num4 = XNum<XLOPER>;
-	using Num = XNum<XLOPER12>;
 
-	// Booliean value
-	template<class X = XLOPER12>
-		requires is_xloper<X>
-	inline constexpr X Bool(bool xbool)
-	{
-		return X{ .val = {.xbool = xbool}, .xltype = xltypeBool };
-	}
-
-	static constexpr XLOPER True4 = Bool<XLOPER>(true);
-	static constexpr XLOPER False4 = Bool<XLOPER>(false);
-	static constexpr XLOPER12 True = Bool<XLOPER12>(true);
-	static constexpr XLOPER12 False = Bool<XLOPER12>(false);
 
 	// Error types
 	template<class X>
@@ -138,7 +116,9 @@ namespace xll {
 			}
 			else if (xltypeMulti == ::type(x)) {
 				malloc_multi(x.val.array.rows, x.val.array.columns);
-				std::copy(::begin(x), ::end(x), val.array.lparray);
+				for (int i = 0; i < size(); ++i) {
+					new (val.array.lparray + i)XOPER(x.val.array.lparray[i]);
+				}
 			}
 			else {
 				// ensure(is_scalar(x));
@@ -157,16 +137,42 @@ namespace xll {
 
 		bool operator==(const X& x) const
 		{
+			if (xltype != x.xltype) {
+				return false;
+			}
 			if (xltypeStr == ::type(x)) {
 				return equal(x.val.str + 1, x.val.str[0]);
 			}
-			else if (xltypeMulti == ::type(x)) {
+			if (xltypeMulti == ::type(x)) {
 				if (rows() != ::rows(x) || columns() != ::columns(x)) {
 					return false;
 				}
+#pragma warning(push)
+#pragma warning(disable: 5232) // recursive
+				for (int i = 0; i < size(); ++i) {
+					if (operator[](i) != x.val.array.lparray[i]) {
+						return false;
+					}
+				}
+#pragma warning(pop)
 
-				return std::equal(begin(), end(), ::begin(x));
+				return true;
 			}
+			switch (xltype) {
+			case xltypeNum:
+				return val.num == x.val.num;
+			case xltypeBool:
+				return val.xbool == x.val.xbool;
+			//case xltypeRef:
+			case xltypeErr:
+				return val.err == x.val.err;
+			//case xltypeSRef:
+			//	return val.sref.ref == x.val.sref.ref;
+			case xltypeInt:
+				return val.w == x.val.w;
+			}
+
+			return true;
 		}
 		bool operator==(const XOPER& o) const
 		{
@@ -179,8 +185,18 @@ namespace xll {
 
 		// Num
 		explicit XOPER(double num)
-			: X(XNum<X>(num))
+			: X{ .val = {.num = num}, .xltype = xltypeNum }
 		{ }
+		operator double& ()
+		{
+			ensure(xltypeNum == xltype);
+			return val.num;
+		}
+		operator const double& () const
+		{
+			ensure(xltypeNum == xltype);
+			return val.num;
+		}
 
 		// Str
 		XOPER(const xchar* str, xchar len)
@@ -192,7 +208,7 @@ namespace xll {
 			: XOPER(str, len(str))
 		{ }
 		template<size_t N>
-		XOPER(const xchar(&str)[N])
+		XOPER(/*const*/ xchar(&str)[N])
 			: XOPER(str, static_cast<xchar>(N - 1))
 		{
 			static_assert(N <= traits<X>::xchar_max);
@@ -222,16 +238,17 @@ namespace xll {
 			return append(str, len(str));
 		}
 
+		explicit XOPER(bool xbool)
+			: X{.val = {.xbool = xbool}, .xltype = xltypeBool}
+		{ }
+
 		// Multi
 		XOPER(xrw r, xcol c)
 		{
 			malloc_multi(r, c);
-			std::fill(begin(), end(), XNil<X>);
-			/*
 			for (int i = 0; i < size(); ++i) {
 				new (val.array.lparray + i)XOPER{};
 			}
-			*/
 		}
 		xrw rows() const noexcept
 		{
@@ -249,27 +266,27 @@ namespace xll {
 		{
 			return xltypeMulti == type() ? val.array.lparray : nullptr;
 		}
-		X& operator[](int i)
+		XOPER& operator[](int i)
 		{
 			return val.array.lparray[i];
 		}
-		const X& operator[](int i) const
+		const XOPER& operator[](int i) const
 		{
 			return val.array.lparray[i];
 		}
-		X& operator()(int i, int j)
+		XOPER& operator()(int i, int j)
 		{
 			return val.array.lparray[i * columns() + j];
 		}
-		const X& operator()(int i, int j) const
+		const XOPER& operator()(int i, int j) const
 		{
 			return val.array.lparray[i * columns() + j];
 		}
 		XOPER* begin()
 		{
-			return xltypeMulti == type() ? (XOPER*)val.array.lparray : this;
+			return xltypeMulti == type() ? /*(XOPER*)*/val.array.lparray : this;
 		}
-		const X* begin() const
+		const XOPER* begin() const
 		{
 			return xltypeMulti == type() ? val.array.lparray : this;
 		}
@@ -277,7 +294,7 @@ namespace xll {
 		{
 			return xltypeMulti == type() ? (XOPER*)val.array.lparray + size() : this + 1;
 		}
-		const X* end() const
+		const XOPER* end() const
 		{
 			return xltypeMulti == type() ? val.array.lparray + size() : this + 1;
 		}
@@ -380,4 +397,10 @@ namespace xll {
 	};
 	using OPER4 = XOPER<XLOPER>;
 	using OPER = XOPER<XLOPER12>;
+/*
+	inline const XLOPER True4 = XOPER<XLOPER>(true);
+	inline XLOPER False4 = XOPER<XLOPER>(false);
+	inline XLOPER12 True = XOPER<XLOPER12>(true);
+	inline XLOPER12 False = XOPER<XLOPER12>(false);
+*/
 }
