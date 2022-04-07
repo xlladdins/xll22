@@ -129,7 +129,11 @@ namespace xll {
 		explicit XOPER(const XOPER& o)
 			: XOPER((X)o)
 		{ }
-		XOPER& operator=(const XOPER&) = delete;
+		XOPER& operator=(const X& x)
+		{
+			free_oper();
+			*this = x;
+		}
 		~XOPER()
 		{
 			free_oper();
@@ -268,11 +272,11 @@ namespace xll {
 		}
 		XOPER& operator[](int i)
 		{
-			return val.array.lparray[i];
+			return static_cast<XOPER<X>&>(val.array.lparray[i]);
 		}
 		const XOPER& operator[](int i) const
 		{
-			return val.array.lparray[i];
+			return static_cast<const XOPER<X>&>(val.array.lparray[i]);
 		}
 		XOPER& operator()(int i, int j)
 		{
@@ -353,14 +357,17 @@ namespace xll {
 		}
 		void free_str()
 		{
-			if (xltypeStr == xltype) {
-				::free(val.str);
-			}
-			else if ((xltypeStr | xlbitXLFree) == xltype) {
+			ensure(xltypeStr == type());
+
+			if (xlbitXLFree & xltype) {
 				X* x[1] = { (X*)this };
 				traits<X>::Excelv(xlFree, 0, 1, x);
+				xltype = xltypeNil;
 			}
-			xltype = xltypeNil;
+			else if (!(xlbitDLLFree & xltype)) {
+				::free(val.str);
+				xltype = xltypeNil;
+			}
 		}
 		void malloc_multi(xrw r, xcol c)
 		{
@@ -387,9 +394,15 @@ namespace xll {
 		}
 		void free_multi()
 		{
-			if (xltypeMulti == xltype) {
+			ensure(xltypeMulti == type());
+			if (xlbitXLFree & xltype) {
+				X* x[1] = { (X*)this };
+				traits<X>::Excelv(xlFree, 0, 1, x);
+				xltype = xltypeNil;
+			}
+			else if (!(xlbitDLLFree&xltype)) {
 				if (size()) {
-					::free(val.array.lparray);
+					::free(val.str);
 				}
 				xltype = xltypeNil;
 			}
