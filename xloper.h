@@ -15,6 +15,8 @@ namespace xll {
 
 	template<class X>
 	concept is_xloper = std::is_same_v<X, XLOPER> || std::is_same_v<X, XLOPER12>;
+	template<class X>
+	concept is_base_of_xloper = std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
 
 	template<class X> struct traits { };
 	template<> struct traits<XLOPER> {
@@ -23,6 +25,7 @@ namespace xll {
 		static constexpr xchar xchar_max = std::numeric_limits<xchar>::max();
 		using xrw = WORD;
 		using xcol = WORD;  // BYTE in REF
+		// xrw_max, xcol_max
 		static int Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
 		{
 			return ::Excel4v(xlfn, operRes, count, opers);
@@ -34,45 +37,84 @@ namespace xll {
 		static const xchar xchar_max = 0x7FFF;
 		using xrw = RW;
 		using xcol = COL;
+		// xrw_max, xcol_max
 		static int Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 		{
 			return ::Excel12v(xlfn, operRes, count, opers);
 		}
 	};
 
+	// turn off memory management bits
 	template<class X>
-	inline int type(const X& x)
+	inline int type(const X& x) noexcept
 	{
 		return x.xltype & ~(xlbitDLLFree | xlbitXLFree);
 	}
+
 	template<class X>
-	inline typename traits<X>::xrw rows(const X& x)
+	inline typename traits<X>::xrw rows(const X& x) noexcept
 	{
 		return xltypeMulti == type(x) ? x.val.array.rows : 1;
 	}
 	template<class X>
-	inline typename traits<X>::xcol columns(const X& x)
+	inline typename traits<X>::xcol columns(const X& x) noexcept
 	{
 		return xltypeMulti == type(x) ? x.val.array.columns : 1;
 	}
 	template<class X>
-	inline auto size(const X& x)
+	inline auto size(const X& x) noexcept
 	{
 		return rows(x) * columns(x);
 	}
+
 	// index
 	template<class X>
-	inline X* begin(X& x)
+		requires is_base_of_xloper<X>
+	inline X& index(X& x, int i) noexcept
 	{
-		return xltypeMulti == type(x) ? x.val.array.lparray : &x;
+		return static_cast<X&>(x.val.array.lparray[i]);
 	}
 	template<class X>
-	inline X* end(X& x)
+		requires is_base_of_xloper<X>
+	inline const X& index(const X& x, int i) noexcept
 	{
-		return xltypeMulti == type(x) ? begin(x) + size(x) : &x + 1;
+		return static_cast<const X&>(x.val.array.lparray[i]);
+	}
+	template<class X>
+		requires is_base_of_xloper<X>
+	inline X& index(X& x, int i, int j) noexcept
+		requires is_xloper<X>
+	{
+		return static_cast<X&>(x.val.array.lparray[i * columns(x) + j]);
+	}
+	template<class X>
+		requires is_base_of_xloper<X>
+	inline const X& index(const X& x, int i, int j) noexcept
+	{
+		return static_cast<const X&>(x.val.array.lparray[i * columns(x) + j]);
 	}
 
-
+	// STL friendly
+	template<class X>
+	inline X* begin(X& x) noexcept
+	{
+		return x.val.array.lparray;
+	}
+	template<class X>
+	inline const X* begin(const X& x) noexcept
+	{
+		return x.val.array.lparray;
+	}
+	template<class X>
+	inline X* end(X& x) noexcept
+	{
+		return begin(x) + size(x);
+	}
+	template<class X>
+	inline const X* end(const X& x) noexcept
+	{
+		return begin(x) + size(x);
+	}
 
 	// Error types
 	template<class X>
@@ -86,15 +128,16 @@ namespace xll {
 	static constexpr XLOPER12 ErrNA = Err<XLOPER12>(xlerrNA);
 
 	template<class X>
-	inline constexpr X XMissing{ .val = {.str = nullptr}, .xltype = xltypeMissing };
+	inline constexpr X XMissing{ .val = { .num = 0 }, .xltype = xltypeMissing };
 	inline constexpr XLOPER Missing4 = XMissing<XLOPER>;
 	inline constexpr XLOPER12 Missing = XMissing<XLOPER12>;
 
 	template<class X>
-	inline constexpr X XNil{ .val = { .str = nullptr }, .xltype = xltypeNil};
+	inline constexpr X XNil{ .val = { .num = 0 }, .xltype = xltypeNil};
 	inline constexpr XLOPER Nil4 = XNil<XLOPER>;
 	inline constexpr XLOPER12 Nil = XNil<XLOPER12>;
 
+#pragma region XOPER
 	template<class X>
 		requires is_xloper<X>
 	class XOPER : public X {
@@ -115,28 +158,55 @@ namespace xll {
 				std::copy(x.val.str + 1, x.val.str + 1 + x.val.str[0], val.str + 1);
 			}
 			else if (xltypeMulti == ::type(x)) {
-				malloc_multi(x.val.array.rows, x.val.array.columns);
+				malloc_multi(::rows(x), ::columns(x));
 				for (int i = 0; i < size(); ++i) {
 					new (val.array.lparray + i)XOPER(x.val.array.lparray[i]);
 				}
 			}
 			else {
 				// ensure(is_scalar(x));
-				xltype = x.xltype;
+				xltype = ::type(x);
 				val = x.val;
 			}
 		}
 		explicit XOPER(const XOPER& o)
 			: XOPER((X)o)
 		{ }
+		XOPER(XOPER&& o)
+		{
+			swap(o);
+		}
 		XOPER& operator=(const X& x)
 		{
 			free_oper();
 			*this = x;
 		}
+		XOPER& operator=(const XOPER& x)
+		{
+			return operator=((X)x);
+		}
+		XOPER& operator=(XOPER&& o) noexcept
+		{
+			swap(o);
+
+			return *this;
+		}
 		~XOPER()
 		{
 			free_oper();
+		}
+
+		[[nodiscard]] int type() const
+		{
+			return ::type(*this);
+		}
+
+		void swap(XOPER& x) noexcept
+		{
+			using std::swap;
+
+			swap(xltype, x.xltype);
+			swap(val, x.val);
 		}
 
 		bool operator==(const X& x) const
@@ -182,15 +252,15 @@ namespace xll {
 		{
 			return operator==((X)o);
 		}
-		int type() const
-		{
-			return ::type(*this);
-		}
 
 		// Num
 		explicit XOPER(double num)
 			: X{ .val = {.num = num}, .xltype = xltypeNum }
 		{ }
+		XOPER& operator=(double num)
+		{
+			return *this = XOPER(num);
+		}
 		operator double& ()
 		{
 			ensure(xltypeNum == xltype);
@@ -216,6 +286,10 @@ namespace xll {
 			: XOPER(str, static_cast<xchar>(N - 1))
 		{
 			static_assert(N <= traits<X>::xchar_max);
+		}
+		XOPER& operator=(const xchar* str)
+		{
+			return *this = XOPER(str);
 		}
 		bool operator==(const xchar* str) const
 		{
@@ -272,23 +346,24 @@ namespace xll {
 		}
 		XOPER& operator[](int i)
 		{
-			return static_cast<XOPER<X>&>(val.array.lparray[i]);
+			return ::index(*this, i);
 		}
 		const XOPER& operator[](int i) const
 		{
-			return static_cast<const XOPER<X>&>(val.array.lparray[i]);
+			return ::index(*this, i);
 		}
 		XOPER& operator()(int i, int j)
 		{
-			return val.array.lparray[i * columns() + j];
+			return ::index(*this, i, j);
 		}
 		const XOPER& operator()(int i, int j) const
 		{
-			return val.array.lparray[i * columns() + j];
+			return ::index(*this, i, j);
 		}
+
 		XOPER* begin()
 		{
-			return xltypeMulti == type() ? /*(XOPER*)*/val.array.lparray : this;
+			return xltypeMulti == type() ? (XOPER*)val.array.lparray : this;
 		}
 		const XOPER* begin() const
 		{
@@ -368,6 +443,7 @@ namespace xll {
 				::free(val.str);
 				xltype = xltypeNil;
 			}
+			// else let xlAutoFree to its job
 		}
 		void malloc_multi(xrw r, xcol c)
 		{
@@ -376,6 +452,10 @@ namespace xll {
 			if (size()) {
 				val.array.lparray = (X*)malloc(r * c * sizeof(X));
 				ensure(val.array.lparray);
+				for (int i = 0; i < size(); ++i) {
+					new (val.array.lparray + i) XOPER{};
+				}
+
 			}
 			else {
 				val.array.lparray = nullptr;
@@ -385,12 +465,24 @@ namespace xll {
 		void realloc_multi(xrw r, xcol c)
 		{
 			ensure(xltypeMulti == xltype);
-			if (size() != r * c) {
-				val.array.lparray = (X*)::realloc(val.array.lparray, r * c * sizeof(X));
-				ensure(val.array.lparray);
+			auto n = size();
+			if (0 == n) {
+				free_multi();
 			}
-			val.array.rows = r;
-			val.array.columns = c;
+			else {
+				val.array.rows = r;
+				val.array.columns = c;
+				if (n > size()) {
+					std::for_each(end(), begin() + n, [](auto& o) { o.free_oper(); });
+				}
+				else if (n < size()) {
+					val.array.lparray = (X*)::realloc(val.array.lparray, size() * sizeof(X));
+					ensure(val.array.lparray);
+					for (int i = n; i < size(); ++i) {
+						new (val.array.lparray + i) XOPER{};
+					}
+				}
+			}
 		}
 		void free_multi()
 		{
@@ -402,12 +494,15 @@ namespace xll {
 			}
 			else if (!(xlbitDLLFree&xltype)) {
 				if (size()) {
-					::free(val.str);
+					std::for_each(begin(), end(), [](auto& o) { o.free_oper(); });
+					::free(val.array.lparray);
 				}
 				xltype = xltypeNil;
 			}
+			// else let xlAutoFree do its job
 		}
 	};
+#pragma endregion XOPER
 	using OPER4 = XOPER<XLOPER>;
 	using OPER = XOPER<XLOPER12>;
 /*
