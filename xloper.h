@@ -178,8 +178,10 @@ namespace xll {
 		}
 		XOPER& operator=(const X& x)
 		{
-			free_oper();
-			*this = x;
+			XOPER o(x);
+			swap(o);
+
+			return *this;
 		}
 		XOPER& operator=(const XOPER& x)
 		{
@@ -211,7 +213,7 @@ namespace xll {
 
 		bool operator==(const X& x) const
 		{
-			if (xltype != x.xltype) {
+			if (type() != ::type(x)) {
 				return false;
 			}
 			if (xltypeStr == ::type(x)) {
@@ -232,7 +234,7 @@ namespace xll {
 
 				return true;
 			}
-			switch (xltype) {
+			switch (type()) {
 			case xltypeNum:
 				return val.num == x.val.num;
 			case xltypeBool:
@@ -246,7 +248,7 @@ namespace xll {
 				return val.w == x.val.w;
 			}
 
-			return true;
+			return true; // same scalar type
 		}
 		bool operator==(const XOPER& o) const
 		{
@@ -289,7 +291,10 @@ namespace xll {
 		}
 		XOPER& operator=(const xchar* str)
 		{
-			return *this = XOPER(str);
+			XOPER o(str);
+			swap(o); // move???
+
+			return *this;
 		}
 		bool operator==(const xchar* str) const
 		{
@@ -316,11 +321,13 @@ namespace xll {
 			return append(str, len(str));
 		}
 
+#pragma region Bool
 		explicit XOPER(bool xbool)
 			: X{.val = {.xbool = xbool}, .xltype = xltypeBool}
 		{ }
+#pragma endregion Bool
 
-		// Multi
+#pragma region Multi
 		XOPER(xrw r, xcol c)
 		{
 			malloc_multi(r, c);
@@ -332,7 +339,7 @@ namespace xll {
 		{
 			return xltypeMulti == type() ? val.array.rows : 1;
 		}
-		xrw columns() const noexcept
+		xcol columns() const noexcept
 		{
 			return xltypeMulti == type() ? val.array.columns : 1;
 		}
@@ -360,6 +367,7 @@ namespace xll {
 		{
 			return ::index(*this, i, j);
 		}
+#pragma endregion Multi
 
 		XOPER* begin()
 		{
