@@ -14,7 +14,7 @@
 namespace xll {
 
 	template<class X>
-	concept is_xloper = std::is_same_v<X, XLOPER> || std::is_same_v<X, XLOPER12>;
+	concept is_xloper = std::is_same_v<XLOPER, X> || std::is_same_v<XLOPER12, X>;
 	template<class X>
 	concept is_base_of_xloper = std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
 
@@ -46,20 +46,20 @@ namespace xll {
 
 	// turn off memory management bits
 	template<class X>
-	inline int type(const X& x) noexcept
+	inline auto type(const X& x) noexcept
 	{
 		return x.xltype & ~(xlbitDLLFree | xlbitXLFree);
 	}
 
 	template<class X>
-	inline typename traits<X>::xrw rows(const X& x) noexcept
+	inline auto rows(const X& x) noexcept
 	{
-		return xltypeMulti == type(x) ? x.val.array.rows : 1;
+		return type(x) == xltypeMulti ? x.val.array.rows : 1;
 	}
 	template<class X>
-	inline typename traits<X>::xcol columns(const X& x) noexcept
+	inline auto columns(const X& x) noexcept
 	{
-		return xltypeMulti == type(x) ? x.val.array.columns : 1;
+		return type(x) == xltypeMulti ? x.val.array.columns : 1;
 	}
 	template<class X>
 	inline auto size(const X& x) noexcept
@@ -67,7 +67,7 @@ namespace xll {
 		return rows(x) * columns(x);
 	}
 
-	// index
+	// 1-d index
 	template<class X>
 		requires is_base_of_xloper<X>
 	inline X& index(X& x, int i) noexcept
@@ -80,6 +80,8 @@ namespace xll {
 	{
 		return static_cast<const X&>(x.val.array.lparray[i]);
 	}
+
+	// 2-d index
 	template<class X>
 		requires is_base_of_xloper<X>
 	inline X& index(X& x, int i, int j) noexcept
@@ -96,36 +98,105 @@ namespace xll {
 
 	// STL friendly
 	template<class X>
+		requires is_base_of_xloper<X>
 	inline X* begin(X& x) noexcept
 	{
-		return x.val.array.lparray;
+		return static_cast<X*>(type(x) == xltypeMulti ? x.val.array.lparray : &x);
 	}
 	template<class X>
+		requires is_base_of_xloper<X>
 	inline const X* begin(const X& x) noexcept
 	{
-		return x.val.array.lparray;
+		return static_cast<const X*>(type(x) == xltypeMulti ? x.val.array.lparray : &x);
 	}
 	template<class X>
+		requires is_base_of_xloper<X>
 	inline X* end(X& x) noexcept
 	{
 		return begin(x) + size(x);
 	}
 	template<class X>
+		requires is_base_of_xloper<X>
 	inline const X* end(const X& x) noexcept
 	{
 		return begin(x) + size(x);
 	}
 
-	// Error types
+	template<class X, class Y>
+		requires is_base_of_xloper<X> && is_base_of_xloper<Y>
+	bool equal(const X& x, const Y& y) noexcept
+	{
+		if (type(x) != type(y)) {
+			return false;
+		}
+		if (xltypeNum == type(x)) {
+			return x.val.num == y.val.num;
+		}
+		if (xltypeStr == type(x)) {
+			if (x.val.str[0] != y.val.str[0]) {
+				return false;
+			}
+			return std::equal(x.val.str + 1, x.val.str + 1 + x.val.str[0], y.val.str + 1);
+		}
+		if (xltypeBool == type(x)) {
+			return x.val.xbool == y.val.xbool;
+		}
+		if (xltypeErr == type(x)) {
+			return x.val.err == y.val.err;
+		}
+		if (xltypeMulti == type(x)) {
+			if (::rows(x) != ::rows(y) || columns(x) != ::columns(y)) {
+				return false;
+			}
+#pragma warning(push)
+#pragma warning(disable: 5232) // recursive
+			for (int i = 0; i < size(x); ++i) {
+				if (!equal(index(x, i), index(y, i))) {
+					return false;
+				}
+			}
+#pragma warning(pop)
+
+			return true;
+		}
+		//case xltypeSRef:
+		//	return x.val.sref.ref == y.val.sref.ref;
+		if (xltypeInt == type(x)) {
+			return x.val.w == y.val.w;
+		}
+
+		return true;
+	}
+
 	template<class X>
 		requires is_xloper<X>
-	inline constexpr X Err(WORD type)
+	inline constexpr X XErr(WORD type) noexcept
 	{
 		return X{ .val = {.err = type}, .xltype = xltypeErr };
 	}
-	static constexpr XLOPER ErrNA4 = Err<XLOPER>(xlerrNA);
-	// ...
-	static constexpr XLOPER12 ErrNA = Err<XLOPER12>(xlerrNA);
+
+	// xlerrX, Excel error string, error description
+#define XLL_ERR(X)                                                          \
+	X(Null,  "#NULL!",  "intersection of two ranges that do not intersect") \
+	X(Div0,  "#DIV/0!", "formula divides by zero")                          \
+	X(Value, "#VALUE!", "variable in formula has wrong type")               \
+	X(Ref,   "#REF!",   "formula contains an invalid cell reference")       \
+	X(Name,  "#NAME?",  "unrecognised formula name or text")                \
+	X(Num,   "#NUM!",   "invalid number")                                   \
+	X(NA,    "#N/A",    "value not available to a formula.")                \
+
+	#define XLL_ERR4(a, b, c) static constexpr XLOPER Err##a##4 = XErr<XLOPER>(xlerr##a);
+	XLL_ERR(XLL_ERR4)
+	#undef XLL_ERR4
+	#define XLL_ERR12(a, b, c) static constexpr XLOPER12 Err##a = XErr<XLOPER12>(xlerr##a);
+	XLL_ERR(XLL_ERR12)
+	#undef XLL_ERR12
+
+	enum class Err {
+	#define XLL_ERR_ENUM(a, b, c) a = xlerr##a,
+		XLL_ERR(XLL_ERR_ENUM)
+	#undef XLL_ERR_ENUM
+	};
 
 	template<class X>
 	inline constexpr X XMissing{ .val = { .num = 0 }, .xltype = xltypeMissing };
@@ -211,51 +282,16 @@ namespace xll {
 			swap(val, x.val);
 		}
 
-		bool operator==(const X& x) const
+		bool operator==(const X& x) const noexcept
 		{
-			if (type() != ::type(x)) {
-				return false;
-			}
-			if (xltypeStr == ::type(x)) {
-				return equal(x.val.str + 1, x.val.str[0]);
-			}
-			if (xltypeMulti == ::type(x)) {
-				if (rows() != ::rows(x) || columns() != ::columns(x)) {
-					return false;
-				}
-#pragma warning(push)
-#pragma warning(disable: 5232) // recursive
-				for (int i = 0; i < size(); ++i) {
-					if (operator[](i) != x.val.array.lparray[i]) {
-						return false;
-					}
-				}
-#pragma warning(pop)
-
-				return true;
-			}
-			switch (type()) {
-			case xltypeNum:
-				return val.num == x.val.num;
-			case xltypeBool:
-				return val.xbool == x.val.xbool;
-			//case xltypeRef:
-			case xltypeErr:
-				return val.err == x.val.err;
-			//case xltypeSRef:
-			//	return val.sref.ref == x.val.sref.ref;
-			case xltypeInt:
-				return val.w == x.val.w;
-			}
-
-			return true; // same scalar type
+			return ::equal(*this, x);
 		}
 		bool operator==(const XOPER& o) const
 		{
 			return operator==((X)o);
 		}
 
-		// Num
+#pragma region Num
 		explicit XOPER(double num)
 			: X{ .val = {.num = num}, .xltype = xltypeNum }
 		{ }
@@ -273,8 +309,9 @@ namespace xll {
 			ensure(xltypeNum == xltype);
 			return val.num;
 		}
+#pragma endregion Num
 
-		// Str
+#pragma region Str
 		XOPER(const xchar* str, xchar len)
 		{
 			malloc_str(len);
@@ -320,12 +357,21 @@ namespace xll {
 		{
 			return append(str, len(str));
 		}
+#pragma endregion Str
 
 #pragma region Bool
 		explicit XOPER(bool xbool)
 			: X{.val = {.xbool = xbool}, .xltype = xltypeBool}
 		{ }
 #pragma endregion Bool
+
+		// Ref
+
+#pragma region Err
+		explicit XOPER(enum Err err)
+			: X{ .val = {.err = err}, .xltype = xltypeErr }
+		{ }
+#pragma endregion Err
 
 #pragma region Multi
 		XOPER(xrw r, xcol c)
@@ -335,17 +381,38 @@ namespace xll {
 				new (val.array.lparray + i)XOPER{};
 			}
 		}
+		XOPER& resize(xrw r, xcol c)
+		{
+			if (xltypeMulti == xltype) {
+				realloc_multi(r, c);
+			}
+			else {
+				XOPER<X> o0{ *this };
+				realloc_multi(1, 1);
+				operator[](0) = o0;
+			}
+
+			return *this;
+		}
+		// stack vertically if same number of columns
+		XOPER& stack(const X& x)
+		{
+			ensure(columns() == ::columns(x));
+			auto r = rows();
+			resize(r + ::rows(x), columns());
+			std::copy(::begin(x), ::end(x), begin() + r * columns());
+		}
 		xrw rows() const noexcept
 		{
-			return xltypeMulti == type() ? val.array.rows : 1;
+			return ::rows(*this);
 		}
 		xcol columns() const noexcept
 		{
-			return xltypeMulti == type() ? val.array.columns : 1;
+			return ::columns(*this);
 		}
 		auto size() const noexcept
 		{
-			return rows() * columns();
+			return ::size(*this);
 		}
 		const X* array() const
 		{
@@ -371,19 +438,19 @@ namespace xll {
 
 		XOPER* begin()
 		{
-			return xltypeMulti == type() ? (XOPER*)val.array.lparray : this;
+			return ::begin(*this);
 		}
 		const XOPER* begin() const
 		{
-			return xltypeMulti == type() ? val.array.lparray : this;
+			return ::begin(*this);
 		}
 		XOPER* end()
 		{
-			return xltypeMulti == type() ? (XOPER*)val.array.lparray + size() : this + 1;
+			return ::end(*this);
 		}
 		const XOPER* end() const
 		{
-			return xltypeMulti == type() ? val.array.lparray + size() : this + 1;
+			return ::end(*this);
 		}
 	private:
 		static xchar len(const xchar* s)
@@ -398,7 +465,7 @@ namespace xll {
 
 			return static_cast<xchar>(n);
 		}
-		bool equal(const xchar* str, int len) const
+		bool equal(const xchar* str, int len) const noexcept
 		{
 			if (val.str[0] != len) {
 				return false;
@@ -473,13 +540,14 @@ namespace xll {
 		void realloc_multi(xrw r, xcol c)
 		{
 			ensure(xltypeMulti == xltype);
-			auto n = size();
-			if (0 == n) {
+			auto n = size(); // old size
+			val.array.rows = r;
+			val.array.columns = c;
+
+			if (!size()) {
 				free_multi();
 			}
 			else {
-				val.array.rows = r;
-				val.array.columns = c;
 				if (n > size()) {
 					std::for_each(end(), begin() + n, [](auto& o) { o.free_oper(); });
 				}

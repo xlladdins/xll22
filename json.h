@@ -5,7 +5,7 @@
 
 namespace xll {
 
-	enum class JSONtype {
+	enum class JSON_t {
 		Null,
 		False,
 		True,
@@ -13,7 +13,7 @@ namespace xll {
 		String,
 		Array,
 		Object,
-		Error, // not a JSON type
+		Undefined, // not a JSON type
 	};
 
 	template<class X>
@@ -44,58 +44,59 @@ namespace xll {
 		explicit XJSON(const xchar* str)
 			: XOPER<X>(str)
 		{ }
-		explicit XJSON(const std::initializer_list<XJSON>& array)
-			: XOPER<X>(static_cast<xrw>(array.size()), 1)
-		{ 
-			for (int i = 0; i < size(); ++i) {
-				operator[](i) = *(array.begin() + i);
-			}
-		}
-		explicit XJSON(const std::map<const xchar*,XJSON<X>>& object)
-			: XOPER<X>(static_cast<xrw>(object.size()), 2)
+		// array
+		XJSON& append(const XJSON& o)
 		{
-			for (int i = 0; i < size(); ++i) {
-				operator()(i, 0) = object[i].first;
-				operator()(i, 1) = object[i].second;
+			ensure(JSON_t::Object != jstype());
+
+			if (JSON_t::Null == jstype()) {
+				XOPER<X>::resize(1, 1);
 			}
+			else {
+				XOPER<X>::resize(size() + 1, 1);
+			}
+			operator[](size() - 1) = o;
+
+			return *this;
 		}
+
 		auto size() const noexcept
 		{
 			return XOPER<X>::rows(); // Null has size 0???
 		}
-		JSONtype jstype() const noexcept
+		JSON_t jstype() const noexcept
 		{
 			switch (XOPER<X>::type()) {
 			case xltypeNil:
-				return JSONtype::Null;
+				return JSON_t::Null;
 			case xltypeBool:
-				return XOPER<X>::val.xbool ? JSONtype::True : JSONtype::False;
+				return XOPER<X>::val.xbool ? JSON_t::True : JSON_t::False;
 			case xltypeNum:
-				return JSONtype::Number;
+				return JSON_t::Number;
 			case xltypeStr:
-				return JSONtype::String;
+				return JSON_t::String;
 			case xltypeMulti:
-				return XOPER<X>::columns() == 1 ? JSONtype::Array
-					 : XOPER<X>::columns() == 2 ? JSONtype::Object
-					 : JSONtype::Error;
+				return XOPER<X>::columns() == 1 ? JSON_t::Array
+					 : XOPER<X>::columns() == 2 ? JSON_t::Object
+					 : JSON_t::Undefined;
 			}
 
-			return JSONtype::Error;
+			return JSON_t::Undefined;
 		}
 		XJSON& operator[](int i)
 		{
-			ensure(JSONtype::Array == jstype());
+			ensure(JSON_t::Array == jstype());
 			return static_cast<XJSON&>(XOPER<X>::operator[](i));
 		}
 		const XJSON& operator[](int i) const
 		{
-			ensure(JSONtype::Array == jstype());
+			ensure(JSON_t::Array == jstype());
 
 			return XOPER<X>::operator[](i);
 		}
 		XJSON& operator()(const xchar* key)
 		{
-			ensure(JSONtype::Object == jstype());
+			ensure(JSON_t::Object == jstype());
 
 			// first match
 			for (int i = 0; i < size(); ++i) {
