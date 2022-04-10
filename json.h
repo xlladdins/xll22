@@ -94,7 +94,7 @@ namespace xll {
 
 			return XOPER<X>::operator[](i);
 		}
-		XJSON& operator()(const xchar* key)
+		XJSON& operator[](const xchar* key)
 		{
 			ensure(JSON_t::Object == jstype());
 
@@ -106,5 +106,7 @@ namespace xll {
 			}
 		}
 	};
+	using JSON4 = XJSON<XLOPER>;
+	using JSON = XJSON<XLOPER12>;
 
 }
