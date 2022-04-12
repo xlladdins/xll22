@@ -17,7 +17,8 @@ namespace xll {
 	};
 
 	template<class X>
-	struct XJSON : protected XOPER<X> {
+	class XJSON : protected XOPER<X> {
+		inline static constexpr X Undefined = XErr<X>(xlerrValue);
 	public:
 		using XOPER<X>::val;
 		using XOPER<X>::xltype;
@@ -83,6 +84,8 @@ namespace xll {
 
 			return JSON_t::Undefined;
 		}
+
+		// Array
 		XJSON& operator[](int i)
 		{
 			ensure(JSON_t::Array == jstype());
@@ -92,19 +95,38 @@ namespace xll {
 		{
 			ensure(JSON_t::Array == jstype());
 
-			return XOPER<X>::operator[](i);
+			return static_cast<const XJSON&>(XOPER<X>::operator[](i));
 		}
+
+		// Object
 		XJSON& operator[](const xchar* key)
 		{
 			ensure(JSON_t::Object == jstype());
 
 			// first match
 			for (int i = 0; i < size(); ++i) {
-				if (operator()(i, 0) == key) {
+				if (XOPER<X>::operator()(i, 0) == key) {
 					return XOPER<X>::operator()(i, 1);
 				}
 			}
 		}
+
+		XJSON& add(const XJSON& o)
+		{
+			if (JSON_t::Array == o.jstype()) {
+				ensure(JSON_t::Object != jstype());
+				if (JSON_t::Array != jstype()) {
+					XOPER<X>::resize(1, 1);
+				}
+				if (JSON_t::Array != o.jstype()) {
+					o.resize(1, 1);
+				}
+				XOPER<X>::stack(o);
+			}
+
+			return *this;
+		}
+
 	};
 	using JSON4 = XJSON<XLOPER>;
 	using JSON = XJSON<XLOPER12>;
