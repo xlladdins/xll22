@@ -123,7 +123,7 @@ namespace xll {
 
 	template<class X, class Y>
 		requires is_base_of_xloper<X> && is_base_of_xloper<Y>
-	bool equal(const X& x, const Y& y)
+	inline bool equal(const X& x, const Y& y)
 	{
 		if (type(x) != type(y)) {
 			return false;
@@ -406,24 +406,23 @@ namespace xll {
 		XOPER& stack(const X& x)
 		{
 			if (xltypeNil == type()) {
-				if (xltypeMulti != ::type(x)) {
-					malloc_multi(1, 1);
-					operator[](0) = x;
-				}
-				else {
-					operator=(x);
-				}
+				operator=(x);
 			}
 			else {
-				if (xltypeMulti != type()) {
-					auto o0{ *this };
-					malloc_multi(1, 1);
-					operator[](0) = o0;
+				if (overlap(x)) {
+					stack(XOPER<X>(x));
 				}
-				ensure(columns() == ::columns(x));
-				auto r = rows();
-				resize(r + ::rows(x), columns());
-				std::copy(::begin(x), ::end(x), begin() + r * columns());
+				else {
+					if (xltypeMulti != type()) {
+						auto o0{ *this };
+						malloc_multi(1, 1);
+						operator[](0) = o0;
+					}
+					ensure(columns() == ::columns(x));
+					auto r = rows();
+					resize(r + ::rows(x), columns());
+					std::copy(::begin(x), ::end(x), begin() + r * columns());
+				}
 			}
 
 			return *this;
@@ -498,6 +497,12 @@ namespace xll {
 			}
 
 			return std::equal(str, str + len, val.str + 1);
+		}
+		// true if memory overlaps with x
+		bool overlap(const X& x) const
+		{
+			return (begin() <= xll::begin(x) and xll::begin(x) < end())
+				|| (begin() < xll::end(x) and xll::end(x) <= end());
 		}
 
 		void free_oper()
