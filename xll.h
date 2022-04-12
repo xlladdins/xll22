@@ -55,6 +55,14 @@ namespace xll {
 		.function_help = "",
 	};
 
+	template<class X>
+	struct XArg {
+		cstr type;
+		cstr name;
+		cstr help;
+		cstr init;
+	};
+
 	// arguments of xlfRegister
 	template<class X = XLOPER12>
 	struct XArgs {
@@ -115,7 +123,7 @@ namespace xll {
 	};
 	template<class X>
 	struct XFunction : public XArgs<X> {
-		XFunction(const X& procedure, const X& function_text)
+		XFunction(const X& procedure, const X& function_text, std::initializer_list<XArg<X>>& args = {})
 			: XArgs()
 		{
 			XArgs<X>::procedure = procedure;

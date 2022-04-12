@@ -22,6 +22,7 @@
     <ClInclude Include="fms_ctypes.h" />
     <ClInclude Include="ensure.h" />
     <ClInclude Include="json.h" />
+    <ClInclude Include="utf8.h" />
     <ClInclude Include="XLCALL.H" />
     <ClInclude Include="xll.h" />
     <ClInclude Include="xloper.h" />

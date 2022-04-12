@@ -10,6 +10,7 @@
 #include <tchar.h>
 #include "XLCALL.H"
 #include "ensure.h"
+#include "utf8.h"
 
 namespace xll {
 
@@ -22,10 +23,15 @@ namespace xll {
 	template<> struct traits<XLOPER> {
 		using type = XLOPER;
 		using xchar = CHAR;
+		using charx = XCHAR;
 		static constexpr xchar xchar_max = std::numeric_limits<xchar>::max();
 		using xrw = WORD;
 		using xcol = WORD;  // BYTE in REF
 		// xrw_max, xcol_max
+		xchar* cvt(const charx* str, int len)
+		{
+			return win::wc2mb(str, len);
+		}
 		static int Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
 		{
 			return ::Excel4v(xlfn, operRes, count, opers);
@@ -34,10 +40,15 @@ namespace xll {
 	template<> struct traits<XLOPER12> {
 		using type = XLOPER12;
 		using xchar = XCHAR;
+		using charx = CHAR;
 		static const xchar xchar_max = 0x7FFF;
 		using xrw = RW;
 		using xcol = COL;
 		// xrw_max, xcol_max
+		xchar* cvt(const charx* str, int len)
+		{
+			return win::mb2wc(str, len);
+		}
 		static int Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 		{
 			return ::Excel12v(xlfn, operRes, count, opers);
@@ -217,6 +228,7 @@ namespace xll {
 		requires is_xloper<X>
 	class XOPER : public X {
 		using xchar = traits<X>::xchar;
+		using charx = traits<X>::charx;
 		using xrw = traits<X>::xrw;
 		using xcol = traits<X>::xcol;
 	public:
@@ -325,11 +337,25 @@ namespace xll {
 			malloc_str(len);
 			std::copy(str, str + len, val.str + 1);
 		}
+		XOPER(const charx* str, charx len)
+			: xltype(xltypeStr)
+		{
+			val.str = traits<X>::cvt(str, len);
+		}
 		explicit XOPER(const xchar* str)
 			: XOPER(str, len(str))
 		{ }
+		explicit XOPER(const charx* str)
+			: XOPER(str, len(str))
+		{ }
 		template<size_t N>
-		XOPER(/*const*/ xchar(&str)[N])
+		XOPER(const xchar(&str)[N])
+			: XOPER(str, static_cast<xchar>(N - 1))
+		{
+			static_assert(N <= traits<X>::xchar_max);
+		}
+		template<size_t N>
+		XOPER(const charx(&str)[N])
 			: XOPER(str, static_cast<xchar>(N - 1))
 		{
 			static_assert(N <= traits<X>::xchar_max);
@@ -342,6 +368,10 @@ namespace xll {
 			return *this;
 		}
 		bool operator==(const xchar* str) const
+		{
+			return equal(str, len(str));
+		}
+		bool operator==(const charx* str) const
 		{
 			return equal(str, len(str));
 		}
@@ -391,7 +421,10 @@ namespace xll {
 		}
 		XOPER& resize(xrw r, xcol c)
 		{
-			if (xltypeMulti == xltype) {
+			if (0 == r * c) {
+				free_oper();
+			}
+			else if (xltypeMulti == xltype) {
 				realloc_multi(r, c);
 			}
 			else {
@@ -501,8 +534,8 @@ namespace xll {
 		// true if memory overlaps with x
 		bool overlap(const X& x) const
 		{
-			return (begin() <= xll::begin(x) and xll::begin(x) < end())
-				|| (begin() < xll::end(x) and xll::end(x) <= end());
+			return (begin() <= ::begin(x) and ::begin(x) < end())
+				or (begin() <  ::end(x)   and ::end(x)  <= end());
 		}
 
 		void free_oper()
@@ -517,6 +550,7 @@ namespace xll {
 				xltype = xltypeNil;
 			}
 		}
+
 		// allocate and set str[0]
 		void malloc_str(xchar len)
 		{
@@ -551,6 +585,7 @@ namespace xll {
 			}
 			// else let xlAutoFree to its job
 		}
+
 		void malloc_multi(xrw r, xcol c)
 		{
 			val.array.rows = r;
