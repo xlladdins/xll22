@@ -9,7 +9,7 @@
 #include <Windows.h>
 #include <tchar.h>
 #include "XLCALL.H"
-#include "ensure.h"
+//#include "ensure.h"
 #include "utf8.h"
 
 namespace xll {
@@ -28,7 +28,7 @@ namespace xll {
 		using xrw = WORD;
 		using xcol = WORD;  // BYTE in REF
 		// xrw_max, xcol_max
-		xchar* cvt(const charx* str, int len)
+		static xchar* cvt(const charx* str, int len)
 		{
 			return win::wc2mb(str, len);
 		}
@@ -45,7 +45,7 @@ namespace xll {
 		using xrw = RW;
 		using xcol = COL;
 		// xrw_max, xcol_max
-		xchar* cvt(const charx* str, int len)
+		static xchar* cvt(const charx* str, int len)
 		{
 			return win::mb2wc(str, len);
 		}
@@ -319,15 +319,18 @@ namespace xll {
 		{
 			return *this = XOPER(num);
 		}
-		operator double& ()
+		operator double () const
 		{
-			ensure(xltypeNum == xltype);
-			return val.num;
-		}
-		operator const double& () const
-		{
-			ensure(xltypeNum == xltype);
-			return val.num;
+			switch (type()) {
+			case xltypeNum:
+				return val.num;
+			case xltypeBool:
+				return val.xbool;
+			case xltypeInt:
+				return val.w;
+			}
+
+			return std::numeric_limits<double>::quiet_NaN();
 		}
 #pragma endregion Num
 
@@ -338,8 +341,8 @@ namespace xll {
 			std::copy(str, str + len, val.str + 1);
 		}
 		XOPER(const charx* str, charx len)
-			: xltype(xltypeStr)
 		{
+			xltype = xltypeStr;
 			val.str = traits<X>::cvt(str, len);
 		}
 		explicit XOPER(const xchar* str)
@@ -380,14 +383,20 @@ namespace xll {
 			xchar n = 0;
 
 			if (xltypeNil == xltype) {
-				malloc_str(len);
+				operator=(XOPER(str, len));
+
+				return *this;
 			}
-			else if (len) {
-				ensure(xltypeStr == xltype);
+			if (xltypeStr != xltype) {
+				operator=(XErr<X>(xlerrValue));
+
+				return *this;
+			}
+			if (len) {
 				n = val.str[0];
 				realloc_str(n + len);
+				std::copy(str, str + len, val.str + 1 + n);
 			}
-			std::copy(str, str + len, val.str + 1 + n);
 
 			return *this;
 		}
@@ -439,24 +448,25 @@ namespace xll {
 		XOPER& stack(const X& x)
 		{
 			if (xltypeNil == type()) {
-				operator=(x);
+				return operator=(x);
 			}
-			else {
-				if (overlap(x)) {
-					stack(XOPER<X>(x));
-				}
-				else {
-					if (xltypeMulti != type()) {
-						auto o0{ *this };
-						malloc_multi(1, 1);
-						operator[](0) = o0;
-					}
-					ensure(columns() == ::columns(x));
-					auto r = rows();
-					resize(r + ::rows(x), columns());
-					std::copy(::begin(x), ::end(x), begin() + r * columns());
-				}
+
+			if (overlap(x)) {
+					return stack(XOPER<X>(x));
 			}
+
+			if (columns() != ::columns(x)) {
+				return operator=(XErr<X>(xlerrValue));
+			}
+
+			if (xltypeMulti != type()) {
+				auto o0{ *this };
+				malloc_multi(1, 1);
+				operator[](0) = o0;
+			}
+			auto r = rows();
+			resize(r + ::rows(x), columns());
+			std::copy(::begin(x), ::end(x), begin() + static_cast<size_t>(r) * columns());
 
 			return *this;
 		}
@@ -511,17 +521,17 @@ namespace xll {
 			return ::end(*this);
 		}
 	private:
-		static xchar len(const xchar* s)
+		template<class T>
+		static T len(const T* s)
 		{
-			size_t n = 0;
+			T n = 0;
 			if (s) {
 				while (s[n]) {
 					++n;
 				}
-				ensure(n <= traits<X>::xchar_max);
 			}
 
-			return static_cast<xchar>(n);
+			return n;
 		}
 		bool equal(const xchar* str, int len) const noexcept
 		{
@@ -535,12 +545,17 @@ namespace xll {
 		bool overlap(const X& x) const
 		{
 			return (begin() <= ::begin(x) and ::begin(x) < end())
-				or (begin() <  ::end(x)   and ::end(x)  <= end());
+				or (begin() < ::end(x) and ::end(x) <= end());
 		}
 
 		void free_oper()
 		{
-			if (xltypeStr == xltype) {
+			if (xlbitXLFree & xltype) {
+				X* x[1] = { (X*)this };
+				traits<X>::Excelv(xlFree, 0, 1, x);
+				xltype = xltypeNil;
+			}
+			else if (xltypeStr == xltype) {
 				free_str();
 			}
 			else if (xltypeMulti == xltype) {
@@ -554,94 +569,105 @@ namespace xll {
 		// allocate and set str[0]
 		void malloc_str(xchar len)
 		{
-			ensure(len <= traits<X>::xchar_max);
-			val.str = (xchar*)::malloc((len + 1) * sizeof(xchar));
-			ensure(val.str);
-			val.str[0] = len;
-			xltype = xltypeStr;
+			val.str = (xchar*)::malloc((static_cast<size_t>(len) + 1) * sizeof(xchar));
+			if (val.str) {
+				val.str[0] = len;
+				xltype = xltypeStr;
+			}
+			else {
+				operator=(XErr<X>(xlerrValue));
+			}
 		}
 		void realloc_str(xchar len)
 		{
-			ensure(xltypeStr == xltype);
+			if (xltypeStr != xltype) {
+				operator=(XErr<X>(xlerrValue));
+
+				return;
+			}
+
 			if (val.str[0] != len) {
-				ensure(len <= traits<X>::xchar_max);
-				val.str = (xchar*)::realloc(val.str, (len + 1) * sizeof(xchar));
-				ensure(val.str);
-				val.str[0] = len;
+				val.str = (xchar*)::realloc(val.str, (static_cast<size_t>(len) + 1) * sizeof(xchar));
+				if (val.str) {
+					val.str[0] = len;
+				}
+				else {
+					operator=(XErr<X>(xlerrValue));
+				}
 			}
 		}
 		void free_str()
 		{
-			ensure(xltypeStr == type());
-
-			if (xlbitXLFree & xltype) {
-				X* x[1] = { (X*)this };
-				traits<X>::Excelv(xlFree, 0, 1, x);
-				xltype = xltypeNil;
+			if (xltypeStr != xltype) {
+				operator=(XErr<X>(xlerrValue));
 			}
-			else if (!(xlbitDLLFree & xltype)) {
+			else {
 				::free(val.str);
 				xltype = xltypeNil;
 			}
-			// else let xlAutoFree to its job
 		}
 
 		void malloc_multi(xrw r, xcol c)
 		{
-			val.array.rows = r;
-			val.array.columns = c;
-			if (size()) {
-				val.array.lparray = (X*)malloc(r * c * sizeof(X));
-				ensure(val.array.lparray);
-				for (int i = 0; i < size(); ++i) {
-					new (val.array.lparray + i) XOPER{};
+			if (r * c) {
+				val.array.lparray = (X*)malloc(static_cast<size_t>(r) * c * sizeof(X));
+				if (val.array.lparray) {
+					for (int i = 0; i < size(); ++i) {
+						new (val.array.lparray + i) XOPER{};
+					}
+					val.array.rows = r;
+					val.array.columns = c;
+					xltype = xltypeMulti;
 				}
-
+				else {
+					operator=(XErr<X>(xlerrValue));
+				}
 			}
 			else {
-				val.array.lparray = nullptr;
+				xltype = xltypeNil;
 			}
-			xltype = xltypeMulti;
 		}
 		void realloc_multi(xrw r, xcol c)
 		{
-			ensure(xltypeMulti == xltype);
+			if (xltypeMulti != xltype) {
+				// free_oper(); // ???
+				operator=(XErr<X>(xlerrValue));
+
+				return;
+			}
+
+			if (0 == r * c) {
+				free_multi();
+
+				return;
+			}
+
 			auto n = size(); // old size
 			val.array.rows = r;
 			val.array.columns = c;
 
-			if (!size()) {
-				free_multi();
+			if (n > size()) {
+				std::for_each(end(), begin() + n, [](auto& o) { o.free_oper(); });
 			}
-			else {
-				if (n > size()) {
-					std::for_each(end(), begin() + n, [](auto& o) { o.free_oper(); });
-				}
-				else if (n < size()) {
-					val.array.lparray = (X*)::realloc(val.array.lparray, size() * sizeof(X));
-					ensure(val.array.lparray);
+			else if (n < size()) {
+				val.array.lparray = (X*)::realloc(val.array.lparray, size() * sizeof(X));
+				if (val.array.lparray) {
 					for (int i = n; i < size(); ++i) {
 						new (val.array.lparray + i) XOPER{};
 					}
+				}
+				else {
+					operator=(XErr<X>(xlerrValue));
 				}
 			}
 		}
 		void free_multi()
 		{
-			ensure(xltypeMulti == type());
-			if (xlbitXLFree & xltype) {
-				X* x[1] = { (X*)this };
-				traits<X>::Excelv(xlFree, 0, 1, x);
+			if (xltypeMulti == xltype) {
+				std::for_each(begin(), end(), [](auto& o) { o.free_oper(); });
+				::free(val.array.lparray);
 				xltype = xltypeNil;
 			}
-			else if (!(xlbitDLLFree&xltype)) {
-				if (size()) {
-					std::for_each(begin(), end(), [](auto& o) { o.free_oper(); });
-					::free(val.array.lparray);
-				}
-				xltype = xltypeNil;
-			}
-			// else let xlAutoFree do its job
 		}
 	};
 #pragma endregion XOPER

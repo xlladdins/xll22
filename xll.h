@@ -1,6 +1,8 @@
 #pragma once
+#include <string>
 #include <vector>
 #include "xloper.h"
+#include "ensure.h"
 
 namespace xll {
 
