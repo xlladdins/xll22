@@ -22,6 +22,7 @@ namespace xll {
 	template<class X> struct traits { };
 	template<> struct traits<XLOPER> {
 		using type = XLOPER;
+		using typex = XLOPER12;
 		using xchar = CHAR;
 		using charx = XCHAR;
 		static constexpr xchar xchar_max = 0xFF;
@@ -39,6 +40,7 @@ namespace xll {
 	};
 	template<> struct traits<XLOPER12> {
 		using type = XLOPER12;
+		using typex = XLOPER;
 		using xchar = XCHAR;
 		using charx = CHAR;
 		static const xchar xchar_max = 0x7FFF;
@@ -157,19 +159,7 @@ namespace xll {
 			if (::rows(x) != ::rows(y) || columns(x) != ::columns(y)) {
 				return false;
 			}
-#pragma warning(push)
-#pragma warning(disable: 5232) // recursive
 			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
-			/*
-			for (int i = 0; i < size(x); ++i) {
-				if (!equal(index(x, i), index(y, i))) {
-					return false;
-				}
-			}
-			*/
-#pragma warning(pop)
-
-			return true;
 		// case xltypeSRef:
 		//	return x.val.sref.ref == y.val.sref.ref;
 		case xltypeInt:
@@ -259,28 +249,20 @@ namespace xll {
 		explicit XOPER(const XOPER& o)
 			: XOPER((X)o)
 		{ }
-		XOPER(XOPER&& o)
-		{
-			xltype = std::exchange(o.xltype, xltypeNil);
-			std::swap(val, o.val);
-		}
+		XOPER(XOPER&& o) noexcept
+			: XOPER(std::exchange(o, XOPER<X>{}))
+		{ }
 		XOPER& operator=(const X& x)
 		{
-			XOPER o(x);
-			swap(o);
-
-			return *this;
+			return *this = XOPER(x);
 		}
 		XOPER& operator=(const XOPER& x)
 		{
-			return operator=((X)x);
+			return *this = XOPER(x);
 		}
 		XOPER& operator=(XOPER&& o) noexcept
 		{
-			if (this != &o) {
-				xltype = std::exchange(o.xltype, xltypeNil);
-				std::swap(val, o.val);
-			}
+			swap(o);
 
 			return *this;
 		}
@@ -291,7 +273,7 @@ namespace xll {
 
 		[[nodiscard]] int type() const
 		{
-			return ::type(*this);
+			return xll::type(*this);
 		}
 
 		void swap(XOPER& x) noexcept
@@ -304,9 +286,9 @@ namespace xll {
 
 		bool operator==(const X& x) const noexcept
 		{
-			return ::equal(*this, x);
+			return xll::equal(*this, x);
 		}
-		bool operator==(const XOPER& o) const
+		bool operator==(const XOPER& o) const noexcept
 		{
 			return operator==((X)o);
 		}
@@ -365,16 +347,17 @@ namespace xll {
 		}
 		XOPER& operator=(const xchar* str)
 		{
-			XOPER o(str);
-			swap(o); // move???
-
-			return *this;
+			return *this = XOPER(str);
 		}
-		bool operator==(const xchar* str) const
+		XOPER& operator=(const charx* str)
+		{
+			return *this = XOPER(str);
+		}
+		bool operator==(const xchar* str) const noexcept
 		{
 			return equal(str, len(str));
 		}
-		bool operator==(const charx* str) const
+		bool operator==(const charx* str) const noexcept
 		{
 			return equal(str, len(str));
 		}
@@ -383,14 +366,10 @@ namespace xll {
 			xchar n = 0;
 
 			if (xltypeNil == xltype) {
-				operator=(XOPER(str, len));
-
-				return *this;
+				return *this = XOPER(str, len);
 			}
 			if (xltypeStr != xltype) {
-				operator=(XErr<X>(xlerrValue));
-
-				return *this;
+				return *this = XErr<X>(xlerrValue);
 			}
 			if (len) {
 				n = val.str[0];
@@ -407,9 +386,15 @@ namespace xll {
 #pragma endregion Str
 
 #pragma region Bool
-		explicit XOPER(bool xbool)
-			: X{.val = {.xbool = xbool}, .xltype = xltypeBool}
+		explicit XOPER(bool b)
+			: X{.val = {.xbool = b}, .xltype = xltypeBool}
 		{ }
+		/*
+		bool operator==(bool b) const noexcept
+		{
+			return true;
+		}
+		*/
 #pragma endregion Bool
 
 		// Ref
@@ -445,7 +430,7 @@ namespace xll {
 		XOPER& stack(const X& x)
 		{
 			if (xltypeNil == type()) {
-				return operator=(x);
+				return *this = x;
 			}
 
 			if (overlap(x)) {
@@ -530,7 +515,8 @@ namespace xll {
 
 			return n;
 		}
-		bool equal(const xchar* str, int len) const noexcept
+		template<class T>
+		bool equal(const T* str, int len) const noexcept
 		{
 			if (val.str[0] != len) {
 				return false;
@@ -557,9 +543,6 @@ namespace xll {
 			}
 			else if (xltypeMulti == xltype) {
 				free_multi();
-			}
-			else {
-				xltype = xltypeNil;
 			}
 		}
 
@@ -672,6 +655,10 @@ namespace xll {
 				std::for_each(begin(), end(), [](auto& o) { o.free_oper(); });
 				::free(val.array.lparray);
 				xltype = xltypeNil;
+			}
+			else {
+				val.err = xlerrValue;
+				xltype = xltypeErr;
 			}
 		}
 	};
