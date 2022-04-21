@@ -24,10 +24,10 @@ namespace xll {
 		using type = XLOPER;
 		using xchar = CHAR;
 		using charx = XCHAR;
-		static constexpr xchar xchar_max = std::numeric_limits<xchar>::max();
+		static constexpr xchar xchar_max = 0xFF;
 		using xrw = WORD;
 		using xcol = WORD;  // BYTE in REF
-		// xrw_max, xcol_max
+		// xrw_max, xcol_max, xdim?
 		static xchar* cvt(const charx* str, int len)
 		{
 			return win::wc2mb(str, len);
@@ -139,40 +139,40 @@ namespace xll {
 		if (type(x) != type(y)) {
 			return false;
 		}
-		if (xltypeNum == type(x)) {
+
+		switch (type(x)) {
+		case xltypeNum:
 			return x.val.num == y.val.num;
-		}
-		if (xltypeStr == type(x)) {
+		case xltypeStr:
 			if (x.val.str[0] != y.val.str[0]) {
 				return false;
 			}
 			return std::equal(x.val.str + 1, x.val.str + 1 + x.val.str[0], y.val.str + 1);
-		}
-		if (xltypeBool == type(x)) {
+		case xltypeBool:
 			return x.val.xbool == y.val.xbool;
-		}
-		// if (xltypeRef == type(x)) { ... }
-		if (xltypeErr == type(x)) {
+		//case xltypeRef: { ... }
+		case xltypeErr:
 			return x.val.err == y.val.err;
-		}
-		if (xltypeMulti == type(x)) {
+		case xltypeMulti:
 			if (::rows(x) != ::rows(y) || columns(x) != ::columns(y)) {
 				return false;
 			}
 #pragma warning(push)
 #pragma warning(disable: 5232) // recursive
+			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
+			/*
 			for (int i = 0; i < size(x); ++i) {
 				if (!equal(index(x, i), index(y, i))) {
 					return false;
 				}
 			}
+			*/
 #pragma warning(pop)
 
 			return true;
-		}
-		// if (xltypeSRef == type(x))
+		// case xltypeSRef:
 		//	return x.val.sref.ref == y.val.sref.ref;
-		if (xltypeInt == type(x)) {
+		case xltypeInt:
 			return x.val.w == y.val.w;
 		}
 
@@ -424,9 +424,6 @@ namespace xll {
 		XOPER(xrw r, xcol c)
 		{
 			malloc_multi(r, c);
-			for (int i = 0; i < size(); ++i) {
-				new (val.array.lparray + i)XOPER{};
-			}
 		}
 		XOPER& resize(xrw r, xcol c)
 		{
@@ -434,12 +431,12 @@ namespace xll {
 				free_oper();
 			}
 			else if (xltypeMulti == xltype) {
-				realloc_multi(r, c);
+				realloc_multi(r, c); // fix up if old col != c???
 			}
 			else {
-				XOPER<X> o0{ *this };
+				XOPER<X> o = std::move(*this);
 				malloc_multi(r, c);
-				operator[](0) = o0;
+				operator[](0) = std::move(o);
 			}
 
 			return *this;
@@ -452,7 +449,7 @@ namespace xll {
 			}
 
 			if (overlap(x)) {
-					return stack(XOPER<X>(x));
+				return stack(XOPER<X>(x));
 			}
 
 			if (columns() != ::columns(x)) {
@@ -575,13 +572,15 @@ namespace xll {
 				xltype = xltypeStr;
 			}
 			else {
-				operator=(XErr<X>(xlerrValue));
+				val.err = xlerrValue;
+				xltype = xltypeErr;
 			}
 		}
 		void realloc_str(xchar len)
 		{
 			if (xltypeStr != xltype) {
-				operator=(XErr<X>(xlerrValue));
+				val.err = xlerrValue;
+				xltype = xltypeErr;
 
 				return;
 			}
@@ -592,14 +591,16 @@ namespace xll {
 					val.str[0] = len;
 				}
 				else {
-					operator=(XErr<X>(xlerrValue));
+					val.err = xlerrValue;
+					xltype = xltypeErr;
 				}
 			}
 		}
 		void free_str()
 		{
 			if (xltypeStr != xltype) {
-				operator=(XErr<X>(xlerrValue));
+				val.err = xlerrValue;
+				xltype = xltypeErr;
 			}
 			else {
 				::free(val.str);
@@ -609,10 +610,11 @@ namespace xll {
 
 		void malloc_multi(xrw r, xcol c)
 		{
-			if (r * c) {
-				val.array.lparray = (X*)malloc(static_cast<size_t>(r) * c * sizeof(X));
+			size_t n = r * c;
+			if (n) {
+				val.array.lparray = (X*)malloc(n * sizeof(X));
 				if (val.array.lparray) {
-					for (int i = 0; i < size(); ++i) {
+					for (int i = 0; i < n; ++i) {
 						new (val.array.lparray + i) XOPER{};
 					}
 					val.array.rows = r;
@@ -620,7 +622,8 @@ namespace xll {
 					xltype = xltypeMulti;
 				}
 				else {
-					operator=(XErr<X>(xlerrValue));
+					val.err = xlerrValue;
+					xltype = xltypeErr;
 				}
 			}
 			else {
@@ -631,7 +634,8 @@ namespace xll {
 		{
 			if (xltypeMulti != xltype) {
 				// free_oper(); // ???
-				operator=(XErr<X>(xlerrValue));
+				val.err = xlerrValue;
+				xltype = xltypeErr;
 
 				return;
 			}
@@ -657,7 +661,8 @@ namespace xll {
 					}
 				}
 				else {
-					operator=(XErr<X>(xlerrValue));
+					val.err = xlerrValue;
+					xltype = xltypeErr;
 				}
 			}
 		}
