@@ -29,6 +29,7 @@ namespace xll {
 		using xrw = WORD;
 		using xcol = WORD;  // BYTE in REF
 		// xrw_max, xcol_max, xdim?
+		using xref = XLREF;
 		static xchar* cvt(const charx* str, int len)
 		{
 			return win::wc2mb(str, len);
@@ -47,6 +48,7 @@ namespace xll {
 		using xrw = RW;
 		using xcol = COL;
 		// xrw_max, xcol_max
+		using xref = XLREF12;
 		static xchar* cvt(const charx* str, int len)
 		{
 			return win::mb2wc(str, len);
@@ -134,6 +136,44 @@ namespace xll {
 		return begin(x) + size(x);
 	}
 
+#pragma region XREF
+	template<class X>
+		requires is_xloper<X>
+	struct XREF : traits<X>::xref {
+		using traits<X>::xref::rwFirst;
+		using traits<X>::xref::rwLast;
+		using traits<X>::xref::colFirst;
+		using traits<X>::xref::colLast;
+//		using traits<X>::xref;
+		using xrw = traits<X>::xrw;
+		using xcol = traits<X>::xcol;
+
+		XREF(const typename traits<X>::xref& x)
+			: traits<X>::xref{ x }
+		{ }
+		XREF(xrw r, xcol c, xrw h = 1, xcol w = 1)
+			: traits<X>::xref{ .rwFirst = r, .rwLast = r + h - 1, .colFirst = c, .colLast = c + w - 1 }
+		{ }
+		bool operator==(const XREF& x) const noexcept
+		{
+			return rwFirst == x.rwFirst
+				&& rwLast == x.rwLast
+				&& colLast == x.colFirst
+				&& colLast == x.colLast;
+		}
+		// same as Excel OFFSET()
+		XREF& offset(xrw r, xcol c, xrw h = 0, xcol w = 0)
+		{
+			rwFirst += r;
+			rwLast += (h ? rwFirst + h - 1 : r);
+			colFirst += c;
+			colLast += (w ? colFirst + w - 1 : c);
+
+			return *this;
+		}
+	};
+#pragma endregion XREF
+
 	template<class X, class Y>
 		requires is_base_of_xloper<X> && is_base_of_xloper<Y>
 	inline bool equal(const X& x, const Y& y)
@@ -160,7 +200,7 @@ namespace xll {
 				return false;
 			}
 			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
-		// case xltypeSRef:
+		//case xltypeSRef:
 		//	return x.val.sref.ref == y.val.sref.ref;
 		case xltypeInt:
 			return x.val.w == y.val.w;
@@ -256,16 +296,20 @@ namespace xll {
 		{
 			return *this = XOPER(x);
 		}
-		XOPER& operator=(const XOPER& x)
+		XOPER& operator=(XOPER x)
 		{
-			return *this = XOPER(x);
+			swap(x);
+
+			return *this;
 		}
+		/*
 		XOPER& operator=(XOPER&& o) noexcept
 		{
 			swap(o);
 
 			return *this;
 		}
+		*/
 		~XOPER()
 		{
 			free_oper();
@@ -300,6 +344,10 @@ namespace xll {
 		XOPER& operator=(double num)
 		{
 			return *this = XOPER(num);
+		}
+		friend bool operator==(const X& x, double num) noexcept
+		{
+			return xltypeNum == ::type(x) and x.val.num == num;
 		}
 		operator double () const
 		{
@@ -389,12 +437,12 @@ namespace xll {
 		explicit XOPER(bool b)
 			: X{.val = {.xbool = b}, .xltype = xltypeBool}
 		{ }
-		/*
-		bool operator==(bool b) const noexcept
+		///*
+		friend bool operator==(const X& x, bool b) noexcept
 		{
 			return true;
 		}
-		*/
+		//*/
 #pragma endregion Bool
 
 		// Ref
@@ -443,6 +491,7 @@ namespace xll {
 
 			if (xltypeMulti != type()) {
 				auto o0{ *this };
+				free_oper();
 				malloc_multi(1, 1);
 				operator[](0) = o0;
 			}
