@@ -33,14 +33,14 @@ namespace xll {
 		cstr init;
 	};
 	struct args {
-		cstr module;
 		cstr type; // return type
 		cstr procedure; // name of function to load
 		cstr function_text; // name to use
 		std::vector<arg> arguments;
+		cstr function_help;
 		cstr category;
 		cstr help_topic;
-		cstr function_help;
+		cstr documentation;
 	};
 
 	inline args xxxa = {
@@ -52,9 +52,9 @@ namespace xll {
 			arg("","","",""),
 			arg("","","",""),
 		},
+		.function_help = "",
 		.category = "",
 		.help_topic = "",
-		.function_help = "",
 	};
 
 	template<class X>

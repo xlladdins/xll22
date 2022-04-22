@@ -5,24 +5,24 @@
 
 // type, mangled, name
 #define CTYPE_ENUM(X) \
-X(signed char,    C, SCHAR) \
-X(char,           D, CHAR) \
-X(unsigned char,  E, UCHAR) \
-X(short,          F, SHORT) \
-X(unsigned short, G, USHORT) \
-X(int,            H, INT) \
-X(unsigned int,   I, UINT) \
-X(long,           J, LONG) \
-X(unsigned long , K, ULONG) \
-X(float,          M, FLOAT) \
-X(double,         N, DOUBLE) \
-X(long double     O, LONG_DOUBLE) \
-X(void*,          P, POINTER) \
-X(array,          Q, ARRAY) \
-X(struct,         V, STRUCT) \
-X(class,          V, CLASS) \
-X(void,           X, VOID) \
-X(...,            Z, ELLIPSIS) \
+	X(signed char,    C, SCHAR) \
+	X(char,           D, CHAR) \
+	X(unsigned char,  E, UCHAR) \
+	X(short,          F, SHORT) \
+	X(unsigned short, G, USHORT) \
+	X(int,            H, INT) \
+	X(unsigned int,   I, UINT) \
+	X(long,           J, LONG) \
+	X(unsigned long , K, ULONG) \
+	X(float,          M, FLOAT) \
+	X(double,         N, DOUBLE) \
+	X(long double     O, LONG_DOUBLE) \
+	X(void*,          P, POINTER) \
+	X(array,          Q, ARRAY) \
+	X(struct,         V, STRUCT) \
+	X(class,          V, CLASS) \
+	X(void,           X, VOID) \
+//	X(...,            Z, ELLIPSIS) \
 
 namespace fms {
 
