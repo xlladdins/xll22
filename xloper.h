@@ -144,10 +144,8 @@ namespace xll {
 		using traits<X>::xref::rwLast;
 		using traits<X>::xref::colFirst;
 		using traits<X>::xref::colLast;
-//		using traits<X>::xref;
 		using xrw = traits<X>::xrw;
 		using xcol = traits<X>::xcol;
-
 		XREF(const typename traits<X>::xref& x)
 			: traits<X>::xref{ x }
 		{ }
@@ -200,8 +198,8 @@ namespace xll {
 				return false;
 			}
 			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
-		//case xltypeSRef:
-		//	return x.val.sref.ref == y.val.sref.ref;
+		case xltypeSRef:
+			return XREF<traits<X>::xref>(x.val.sref.ref) == XREF<traits<Y>::xref>(y.val.sref.ref);
 		case xltypeInt:
 			return x.val.w == y.val.w;
 		}
@@ -290,8 +288,11 @@ namespace xll {
 			: XOPER((X)o)
 		{ }
 		XOPER(XOPER&& o) noexcept
-			: XOPER(std::exchange(o, XOPER<X>{}))
-		{ }
+		{
+			val = o.val;
+			xltype = o.xltype;
+			o.xltype = xltypeNil;
+		}
 		XOPER& operator=(const X& x)
 		{
 			return *this = XOPER(x);
@@ -440,7 +441,7 @@ namespace xll {
 		///*
 		friend bool operator==(const X& x, bool b) noexcept
 		{
-			return true;
+			return xltypeBool == ::type(x) and static_cast<bool>(x.val.xbool) == b;
 		}
 		//*/
 #pragma endregion Bool
@@ -714,7 +715,16 @@ namespace xll {
 #pragma endregion XOPER
 	using OPER4 = XOPER<XLOPER>;
 	using OPER = XOPER<XLOPER12>;
-/*
+
+	template<> struct traits<XOPER<XLOPER>> {
+		using type = XLOPER;
+		using xref = XLREF;
+	};
+	template<> struct traits<XOPER<XLOPER12>> {
+		using type = XLOPER12;
+		using xref = XLREF12;
+	};
+	/*
 	inline const XLOPER True4 = XOPER<XLOPER>(true);
 	inline XLOPER False4 = XOPER<XLOPER>(false);
 	inline XLOPER12 True = XOPER<XLOPER12>(true);
