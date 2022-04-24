@@ -253,15 +253,27 @@ namespace xll {
 #pragma endregion Num
 
 #pragma region Str
+		// XOPER(nullptr, len) allocates memory
 		XOPER(const xchar* str, xchar len)
 		{
 			malloc_str(len);
-			std::copy(str, str + len, val.str + 1);
+			if (str) {
+				std::copy(str, str + len, val.str + 1);
+			}
 		}
 		XOPER(const charx* str, charx len)
 		{
 			xltype = xltypeStr;
-			val.str = traits<X>::cvt(str, len);
+			if (str) {
+				val.str = traits<X>::cvt(str, len);
+			}
+			else {
+				xltype = xltypeStr;
+				val.str = (xchar*)malloc((len + 1) * sizeof(xchar));
+				if (val.str) {
+					val.str[0] = static_cast<xchar>(len);
+				}
+			}
 		}
 		explicit XOPER(const xchar* str)
 			: XOPER(str, len(str))
