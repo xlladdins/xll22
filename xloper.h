@@ -15,9 +15,15 @@
 namespace xll {
 
 	template<class X>
-	concept is_xloper = std::is_same_v<XLOPER, X> || std::is_same_v<XLOPER12, X>;
+	concept is_xloper 
+		= std::is_same_v<XLOPER, X> || std::is_same_v<XLOPER12, X>;
 	template<class X>
-	concept is_base_of_xloper = std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
+	concept is_base_of_xloper 
+		= std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
+	template<class X, class Y>
+	concept both_base_of_xloper 
+		=  (std::is_base_of_v<XLOPER, X> && std::is_base_of_v<XLOPER, Y>)
+		|| (std::is_base_of_v<XLOPER12, X> && std::is_base_of_v<XLOPER12, Y>);
 
 	template<class X> struct traits { };
 	template<> struct traits<XLOPER> {
@@ -136,41 +142,6 @@ namespace xll {
 		return begin(x) + size(x);
 	}
 
-#pragma region XREF
-	template<class X>
-		requires is_xloper<X>
-	struct XREF : traits<X>::xref {
-		using traits<X>::xref::rwFirst;
-		using traits<X>::xref::rwLast;
-		using traits<X>::xref::colFirst;
-		using traits<X>::xref::colLast;
-		using xrw = traits<X>::xrw;
-		using xcol = traits<X>::xcol;
-		XREF(const typename traits<X>::xref& x)
-			: traits<X>::xref{ x }
-		{ }
-		XREF(xrw r, xcol c, xrw h = 1, xcol w = 1)
-			: traits<X>::xref{ .rwFirst = r, .rwLast = r + h - 1, .colFirst = c, .colLast = c + w - 1 }
-		{ }
-		bool operator==(const XREF& x) const noexcept
-		{
-			return rwFirst == x.rwFirst
-				&& rwLast == x.rwLast
-				&& colLast == x.colFirst
-				&& colLast == x.colLast;
-		}
-		// same as Excel OFFSET()
-		XREF& offset(xrw r, xcol c, xrw h = 0, xcol w = 0)
-		{
-			rwFirst += r;
-			rwLast += (h ? rwFirst + h - 1 : r);
-			colFirst += c;
-			colLast += (w ? colFirst + w - 1 : c);
-
-			return *this;
-		}
-	};
-#pragma endregion XREF
 
 	template<class X, class Y>
 		requires is_base_of_xloper<X> && is_base_of_xloper<Y>
@@ -194,12 +165,12 @@ namespace xll {
 		case xltypeErr:
 			return x.val.err == y.val.err;
 		case xltypeMulti:
-			if (::rows(x) != ::rows(y) || columns(x) != ::columns(y)) {
+			if (rows(x) != rows(y) || columns(x) != columns(y)) {
 				return false;
 			}
 			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
-		case xltypeSRef:
-			return XREF<traits<X>::xref>(x.val.sref.ref) == XREF<traits<Y>::xref>(y.val.sref.ref);
+		//case xltypeSRef:
+		//	return XREF<traits<X>::xref>(x.val.sref.ref) == XREF<traits<Y>::xref>(y.val.sref.ref);
 		case xltypeInt:
 			return x.val.w == y.val.w;
 		}
