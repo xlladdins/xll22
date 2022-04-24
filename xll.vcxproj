@@ -19,9 +19,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="defines.h" />
     <ClInclude Include="fms_ctypes.h" />
     <ClInclude Include="ensure.h" />
     <ClInclude Include="json.h" />
+    <ClInclude Include="traits.h" />
     <ClInclude Include="utf8.h" />
     <ClInclude Include="XLCALL.H" />
     <ClInclude Include="xll.h" />

@@ -6,8 +6,6 @@
 
 namespace xll {
 
-	// full name of dll set in DllMain
-	inline const TCHAR* module_text = nullptr;
 
 	// fixed size xltypeStr
 	template<class X, size_t N>

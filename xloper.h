@@ -4,66 +4,10 @@
 #include <compare>
 #include <concepts>
 #include <memory>
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <tchar.h>
-#include "XLCALL.H"
-//#include "ensure.h"
-#include "utf8.h"
+#include "xlref.h"
+//#include "utf8.h"
 
 namespace xll {
-
-	template<class X>
-	concept is_xloper 
-		= std::is_same_v<XLOPER, X> || std::is_same_v<XLOPER12, X>;
-	template<class X>
-	concept is_base_of_xloper 
-		= std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
-	template<class X, class Y>
-	concept both_base_of_xloper 
-		=  (std::is_base_of_v<XLOPER, X> && std::is_base_of_v<XLOPER, Y>)
-		|| (std::is_base_of_v<XLOPER12, X> && std::is_base_of_v<XLOPER12, Y>);
-
-	template<class X> struct traits { };
-	template<> struct traits<XLOPER> {
-		using type = XLOPER;
-		using typex = XLOPER12;
-		using xchar = CHAR;
-		using charx = XCHAR;
-		static constexpr xchar xchar_max = 0xFF;
-		using xrw = WORD;
-		using xcol = WORD;  // BYTE in REF
-		// xrw_max, xcol_max, xdim?
-		using xref = XLREF;
-		static xchar* cvt(const charx* str, int len)
-		{
-			return win::wc2mb(str, len);
-		}
-		static int Excelv(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[])
-		{
-			return ::Excel4v(xlfn, operRes, count, opers);
-		}
-	};
-	template<> struct traits<XLOPER12> {
-		using type = XLOPER12;
-		using typex = XLOPER;
-		using xchar = XCHAR;
-		using charx = CHAR;
-		static const xchar xchar_max = 0x7FFF;
-		using xrw = RW;
-		using xcol = COL;
-		// xrw_max, xcol_max
-		using xref = XLREF12;
-		static xchar* cvt(const charx* str, int len)
-		{
-			return win::mb2wc(str, len);
-		}
-		static int Excelv(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
-		{
-			return ::Excel12v(xlfn, operRes, count, opers);
-		}
-	};
 
 	// turn off memory management bits
 	template<class X>
@@ -142,9 +86,8 @@ namespace xll {
 		return begin(x) + size(x);
 	}
 
-
 	template<class X, class Y>
-		requires is_base_of_xloper<X> && is_base_of_xloper<Y>
+		requires both_base_of_xloper<X,Y>
 	inline bool equal(const X& x, const Y& y)
 	{
 		if (type(x) != type(y)) {
@@ -161,7 +104,16 @@ namespace xll {
 			return std::equal(x.val.str + 1, x.val.str + 1 + x.val.str[0], y.val.str + 1);
 		case xltypeBool:
 			return x.val.xbool == y.val.xbool;
-		//case xltypeRef: { ... }
+		case xltypeRef: {
+			if (x.val.mref.idSheet != y.val.mref.idSheet) {
+				return false;
+			}
+
+			const auto& xm = *x.val.mref.lpmref;
+			const auto& ym = *y.val.mref.lpmref;
+
+			return std::equal(begin(xm), end(xm), begin(ym), end(ym));
+		}
 		case xltypeErr:
 			return x.val.err == y.val.err;
 		case xltypeMulti:
@@ -169,57 +121,21 @@ namespace xll {
 				return false;
 			}
 			return std::equal(begin(x), end(x), begin(y), end(y), equal<X,Y>);
-		//case xltypeSRef:
-		//	return XREF<traits<X>::xref>(x.val.sref.ref) == XREF<traits<Y>::xref>(y.val.sref.ref);
+		case xltypeSRef:
+			return x.val.sref.ref == y.val.sref.ref;
 		case xltypeInt:
 			return x.val.w == y.val.w;
+		case xltypeBigData:
+			if (x.val.bigdata.cbData != y.val.bigdata.cbData) {
+				return false;
+			}
+			return 0 == memcmp(x.val.bigdata.h.lpbData, y.val.bigdata.h.lpbData, x.val.bigdata.cbData);
 		}
 
 		return true;
 	}
 
-	template<class X>
-		requires is_xloper<X>
-	inline constexpr X XErr(WORD type)
-	{
-		return X{ .val = {.err = type}, .xltype = xltypeErr };
-	}
 
-	// xlerrX, Excel error string, error description
-#define XLL_ERR(X)                                                          \
-	X(Null,  "#NULL!",  "intersection of two ranges that do not intersect") \
-	X(Div0,  "#DIV/0!", "formula divides by zero")                          \
-	X(Value, "#VALUE!", "variable in formula has wrong type")               \
-	X(Ref,   "#REF!",   "formula contains an invalid cell reference")       \
-	X(Name,  "#NAME?",  "unrecognised formula name or text")                \
-	X(Num,   "#NUM!",   "invalid number")                                   \
-	X(NA,    "#N/A",    "value not available to a formula.")                \
-
-	// ErrNull4, ...
-	#define XLL_ERR4(a, b, c) static constexpr XLOPER Err##a##4 = XErr<XLOPER>(xlerr##a);
-	XLL_ERR(XLL_ERR4)
-	#undef XLL_ERR4
-	// ErrNull, ...
-	#define XLL_ERR12(a, b, c) static constexpr XLOPER12 Err##a = XErr<XLOPER12>(xlerr##a);
-	XLL_ERR(XLL_ERR12)
-	#undef XLL_ERR12
-
-	// Err::NA = xlerrNA, ...
-	enum class Err {
-	#define XLL_ERR_ENUM(a, b, c) a = xlerr##a,
-		XLL_ERR(XLL_ERR_ENUM)
-	#undef XLL_ERR_ENUM
-	};
-
-	template<class X>
-	inline constexpr X XMissing{ .val = { .num = 0 }, .xltype = xltypeMissing };
-	inline constexpr XLOPER Missing4 = XMissing<XLOPER>;
-	inline constexpr XLOPER12 Missing = XMissing<XLOPER12>;
-
-	template<class X>
-	inline constexpr X XNil{ .val = { .num = 0 }, .xltype = xltypeNil};
-	inline constexpr XLOPER Nil4 = XNil<XLOPER>;
-	inline constexpr XLOPER12 Nil = XNil<XLOPER12>;
 
 #pragma region XOPER
 	// value type for XLOPER
