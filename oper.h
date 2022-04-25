@@ -1,5 +1,6 @@
 // oper.h - Value type for XLOPER
 #pragma once
+#include "ensure.h"
 #include "xloper.h"
 
 namespace xll {
