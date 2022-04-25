@@ -1,11 +1,12 @@
 #pragma once
 #include <string>
 #include <vector>
-#include "xloper.h"
+#include "oper.h"
 #include "ensure.h"
 
 namespace xll {
 
+	inline std::map<std::string, int> AddinMap;
 
 	// fixed size xltypeStr
 	template<class X, size_t N>
@@ -76,7 +77,7 @@ namespace xll {
 		X shortcut_text;
 		X help_topic;
 		X function_help;
-		X argument_help[21];
+		X argument_help[21]; int nargs = 0;
 		X* opers[32];
 		XArgs()
 			: file_text{ .val = { .str = const_cast<XCHAR*>(module_text) }, .xltype = xltypeStr },

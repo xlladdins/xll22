@@ -45,6 +45,9 @@
     <ClInclude Include="traits.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="oper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="auto.cpp">
@@ -63,5 +66,8 @@
   <ItemGroup>
     <Library Include="XLCALL32.LIB" />
     <Library Include="x64\XLCALL32.LIB" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="NOTES.md" />
   </ItemGroup>
 </Project>

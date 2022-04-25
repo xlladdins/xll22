@@ -23,6 +23,7 @@
     <ClInclude Include="fms_ctypes.h" />
     <ClInclude Include="ensure.h" />
     <ClInclude Include="json.h" />
+    <ClInclude Include="oper.h" />
     <ClInclude Include="traits.h" />
     <ClInclude Include="utf8.h" />
     <ClInclude Include="XLCALL.H" />
@@ -49,6 +50,9 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
     </Library>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="NOTES.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
