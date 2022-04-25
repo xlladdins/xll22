@@ -1,31 +1,9 @@
 // defines.h - top level definitions
 #pragma once
-
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <tchar.h>
-#include "XLCALL.H"
-//#include "ensure.h"
-//#include "utf8.h"
-#include <concepts>
 #include <map>
+#include "traits.h"
 
 namespace xll {
-
-	template<class X>
-	concept is_xloper
-		= std::is_same_v<XLOPER, X> || std::is_same_v<XLOPER12, X>;
-	template<class X>
-	concept is_base_of_xloper
-		= std::is_base_of_v<XLOPER, X> || std::is_base_of_v<XLOPER12, X>;
-	template<class X, class Y>
-	concept both_base_of_xloper
-		= (std::is_base_of_v<XLOPER, X> && std::is_base_of_v<XLOPER, Y>)
-		|| (std::is_base_of_v<XLOPER12, X> && std::is_base_of_v<XLOPER12, Y>);
-
-	// full name of dll set in DllMain
-	inline const TCHAR* module_text = nullptr;
 
 	template<class X> requires is_xloper<X>
 	constinit X XMissing{ /*.val = {.num = 0},*/ .xltype = xltypeMissing};
@@ -36,6 +14,23 @@ namespace xll {
 	inline constexpr X XNil{ .val = {.num = 0 }, .xltype = xltypeNil };
 	inline constexpr XLOPER Nil4 = XNil<XLOPER>;
 	inline constexpr XLOPER12 Nil = XNil<XLOPER12>;
+
+	// fixed size xltypeStr
+	template<class X, size_t N>
+		requires is_xloper<X>
+	class XSTR : public X {
+		using xchar = traits<X>::xchar;
+		xchar buf[N];
+	public:
+		XSTR(const xchar(&str)[N])
+			: X{ .val = {.str = (xchar*)buf}, .xltype = xltypeStr }
+		{
+			buf[0] = N - 1;
+			std::copy(str, str + N - 1, buf + 1);
+		}
+	};
+#define XLL_STR4(s) XSTR<XLOPER, _countof(s)>(s)
+#define XLL_STR(s) XSTR<XLOPER12, _countof(s)>(s)
 
 	template<class X> requires is_xloper<X>
 	inline constexpr X XErr(WORD type)

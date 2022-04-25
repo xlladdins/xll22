@@ -1,4 +1,5 @@
 #pragma once
+#include <initializer_list>
 #include <string>
 #include <vector>
 #include "oper.h"
@@ -6,24 +7,9 @@
 
 namespace xll {
 
-	inline std::map<std::string, int> AddinMap;
+	//inline std::map<std::string, int> AddInMap;
 
-	// fixed size xltypeStr
-	template<class X, size_t N>
-	class XSTR : public X {
-		using xchar = traits<X>::xchar;
-		xchar buf[N + 1];
-	public:
-		XSTR(const xchar* str, xchar len)
-			: X{ .val = {.str = (xchar*)buf}, .xltype = xltypeStr }
-		{
-			std::copy(str, str + len, buf + 1);
-			buf[0] = len;
-		}
-	};
-#define XLL_STR4(s) XSTR<XLOPER>(s, _countof(s))
-#define XLL_STR(s) XSTR<XLOPER12>(s, _countof(s))
-
+	/*
 	using cstr = std::string;
 	struct arg {
 		cstr type;
@@ -55,7 +41,8 @@ namespace xll {
 		.category = "",
 		.help_topic = "",
 	};
-
+	*/
+	using cstr = std::string;
 	template<class X>
 	struct XArg {
 		cstr type;
@@ -110,7 +97,7 @@ namespace xll {
 	};
 	using Args4 = XArgs<XLOPER>;
 	using Args = XArgs<XLOPER12>;
-
+	/*
 	template<class X>
 	struct XMacro : public XArgs<X> {
 		XMacro(const X& procedure, const X& function_text)
@@ -134,18 +121,20 @@ namespace xll {
 		}
 
 	};
+	*/
 
+	// https://docs.microsoft.com/en-us/office/client-developer/excel/xlfregister-form-1
 	inline int Register(Args4& args)
 	{
 		XLOPER x;
-		int ret = Excel4v(xlfRegister, &x, 10/* + n*/, args.opers);
+		int ret = Excel4v(xlfRegister, &x, 10 + args.nargs, args.opers);
 		return ret;
 	}
 	inline int Register(Args& args)
 	{
 		XLOPER12 x;
-		int ret = Excel12v(xlfRegister, &x, 10, args.opers);
+		int ret = Excel12v(xlfRegister, &x, 10 + args.nargs, args.opers);
 		return ret;
 	}
 
-}
+} // namespace xll

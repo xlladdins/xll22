@@ -5,8 +5,8 @@
 using namespace xll;
 
 #define XLL_ERROR(msg) MessageBoxA(0, msg, "Error", MB_OK)
-#define XLL_WARN(msg) MessageBoxA(0, msg, "Warning", MB_OK)
-#define XLL_INFO(msg) MessageBoxA(0, msg, "Information", MB_OK)
+#define XLL_WARN(msg)  MessageBoxA(0, msg, "Warning", MB_OK)
+#define XLL_INFO(msg)  MessageBoxA(0, msg, "Information", MB_OK)
 
 #pragma region xlAutoOpen
 // Called by Excel when the xll is opened.

@@ -1,6 +1,6 @@
 // xlref.h - Single reference
 #pragma once
-#include "traits.h"
+#include "defines.h"
 
 inline bool operator==(const XLREF& x, const XLREF& y)
 {
