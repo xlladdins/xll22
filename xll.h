@@ -1,6 +1,5 @@
 #pragma once
 #include <initializer_list>
-#include <string>
 #include <vector>
 #include "oper.h"
 #include "ensure.h"
@@ -54,74 +53,97 @@ namespace xll {
 	// arguments of xlfRegister
 	template<class X = XLOPER12>
 	struct XArgs {
-		X file_text; // name of dll
-		X procedure; // name of function to load
-		X type_text; // signature
-		X function_text; // Excel name
-		X argument_text; // comma separated argument names
-		X macro_type; // 1 for a function or 2 for a command
-		X category;
-		X shortcut_text;
-		X help_topic;
-		X function_help;
-		X argument_help[21]; int nargs = 0;
+		XOPER<X> file_text; // name of dll
+		XOPER<X> procedure; // name of function to load
+		XOPER<X> type_text; // signature
+		XOPER<X> function_text; // Excel name
+		XOPER<X> argument_text; // comma separated argument names
+		XOPER<X> macro_type; // 1 for a function or 2 for a command
+		XOPER<X> category;
+		XOPER<X> shortcut_text;
+		XOPER<X> help_topic;
+		XOPER<X> function_help;
+		XOPER<X> argument_help[21]; int nargs = 0;
 		X* opers[32];
 		XArgs()
-			: file_text{ .val = { .str = const_cast<XCHAR*>(module_text) }, .xltype = xltypeStr },
-			  type_text{XNil<X>},
-			  argument_text{XNil<X>},
-			  category{XNil<X>},
-			  shortcut_text{XNil<X>},
-			  help_topic{XNil<X>},
-			  function_help{XNil<X>},
+			: file_text{module_text},
 			  opers{ 
 				&file_text, &procedure, &type_text, &function_text, &argument_text, 
 				&macro_type, &category, &shortcut_text, &help_topic, &function_help
 			  }
 		{
 			for (int i = 0; i < 21; ++i) {
-				argument_help[i] = XNil<X>;
 				opers[i + 10] = &argument_help[i];
 			}
 		}
-		XArgs& Procedure(const X& procedure)
+		XArgs& Arguments(std::initializer_list<XArg<X>>& args)
 		{
-			this->procedure = procedure;
+			ensure(args.size() <= 21);
+			nargs = static_cast<int>(args.size());
+
+			std::string comma("");
+			for (size_t i = 0; i < args.size(); ++i) {
+				type_text.append(args[i].type);
+				argument_text.append(comma);
+				argument_text.append(args[i].name);
+				argument_help[i] = args[i].help;
+				comma = ", ";
+			}
 
 			return *this;
 		}
-		const X& Procedure() const
+		int ArgCount() const
 		{
-			return procedure;
+			return nargs;
+		}
+		XArgs& Category(const char* category_)
+		{
+			category = category_;
+
+			return *this;
+		}
+		const XOPER<X>& Category() const
+		{
+			return category;
+		}
+		XArgs& FunctionHelp(const char* function_help_)
+		{
+			function_help = function_help_;
+
+			return *this;
+		}
+		const XOPER<X>& FunctionHelp() const
+		{
+			return function_help;
 		}
 	};
 	using Args4 = XArgs<XLOPER>;
 	using Args = XArgs<XLOPER12>;
-	/*
+	
 	template<class X>
 	struct XMacro : public XArgs<X> {
-		XMacro(const X& procedure, const X& function_text)
-			: XArgs()
+		XMacro(const char* procedure, const char* function_text)
+			: XArgs<X>{}
 		{
 			XArgs<X>::procedure = procedure;
 			XArgs<X>::function_text = function_text;
-			XArgs<X>::macro_type = XNum<X>(2);
+			XArgs<X>::macro_type = XOPER<X>(2.);
 		}
 
 	};
 	template<class X>
 	struct XFunction : public XArgs<X> {
-		XFunction(const X& procedure, const X& function_text, std::initializer_list<XArg<X>>& args = {})
+		XFunction(const char* type_text, const char* procedure, const char* function_text)
 			: XArgs()
 		{
 			XArgs<X>::procedure = procedure;
-			//XArgs<X>::type_text = type_text;
+			XArgs<X>::type_text = type_text;
 			XArgs<X>::function_text = function_text;
-			XArgs<X>::macro_type = XNum<X>(1);
+			XArgs<X>::macro_type = XOPER<X>(1.);
 		}
 
 	};
-	*/
+	
 
 	// https://docs.microsoft.com/en-us/office/client-developer/excel/xlfregister-form-1
 	inline int Register(Args4& args)

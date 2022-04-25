@@ -14,14 +14,9 @@ extern "C" int __declspec(dllexport) WINAPI
 xlAutoOpen(void)
 {
 	try {
-		/*
-		test_oper<XLOPER>();
-
-		Str proc(L"foo");
-		Str name(L"FOO");
-		xll::XArgs<XLOPER12> macro(proc, name);
-		xll::Register(macro);
-		*/
+		xll::XArgs<XLOPER12> xai_foo(XMacro<XLOPER12>("foo", "FOO").Category("Bar"));
+		//macro.Category("Bar");
+		//xll::Register(macro);
 	}
 	catch (const std::exception& ex) {
 		XLL_ERROR(ex.what());

@@ -1,6 +1,7 @@
 // defines.h - top level definitions
 #pragma once
 #include <map>
+#include <string>
 #include "traits.h"
 
 namespace xll {
@@ -117,12 +118,8 @@ namespace xll {
 // 64-bit uses different symbol name decoration
 #ifdef _M_X64 
 #define XLL_DECORATE(s,n) s
-#define XLL_X64(x) x
-#define XLL_X32(x)
 #else
 #define XLL_DECORATE(s,n) "_" s "@" #n
-#define XLL_X64(x)	
-#define XLL_X32(x) x
 #endif
 
 } // namespace xll

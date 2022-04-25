@@ -198,6 +198,17 @@ namespace xll {
 		{
 			return append(str, len(str));
 		}
+		std::string to_string() const
+		{
+			ensure(xltypeStr == xltype);
+
+			if constexpr (std::is_same_v<X, XLOPER>) {
+				return std::string(val.str + 1, val.str[0]);
+			}
+			if constexpr (std::is_same_v<X, XLOPER12>) {
+				return XOPER<XLOPER>(val.str + 1, val.str[0]).to_string();
+			}
+		}
 #pragma endregion Str
 
 #pragma region Bool

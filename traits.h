@@ -3,16 +3,17 @@
 
 #include <concepts>
 #include <type_traits>
-//#include <string>
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <tchar.h>
 #include "XLCALL.H"
-//#include "ensure.h"
 #include "utf8.h"
 
 namespace xll {
+
+	// full name of dll set in DllMain
+	inline const TCHAR* module_text = nullptr;
 
 	template<class X>
 	concept is_xloper
@@ -24,9 +25,6 @@ namespace xll {
 	concept both_base_of_xloper
 		= (std::is_base_of_v<XLOPER, X> && std::is_base_of_v<XLOPER, Y>)
 		|| (std::is_base_of_v<XLOPER12, X> && std::is_base_of_v<XLOPER12, Y>);
-
-	// full name of dll set in DllMain
-	inline const TCHAR* module_text = nullptr;
 
 	template<class X> struct traits { };
 
