@@ -190,14 +190,6 @@ namespace xll {
 
 			return *this;
 		}
-		/*
-		XOPER& operator=(XOPER&& o) noexcept
-		{
-			swap(o);
-
-			return *this;
-		}
-		*/
 		~XOPER()
 		{
 			free_oper();
